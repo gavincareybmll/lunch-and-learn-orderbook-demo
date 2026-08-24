@@ -26,10 +26,15 @@ thing. Do this:
 ./scripts/jira.sh comment {{ISSUE_KEY}} "<your explanation>" --mention "$PM_ACCOUNT_ID" --mention-name "Gavin Carey"
 ```
 
-Your comment must say **specifically** what is missing and what would make it buildable. Name the
-different things the wording could reasonably mean and why they conflict. Offer the acceptance
-criteria you would need. Do not guess, do not build a partial version, and do not be vague about
-being confused — "this is unclear" helps nobody.
+**Keep the comment short — it gets read on a projector.** Aim for under 120 words in this shape:
+
+- One sentence saying you are declining and why, in plain language
+- A short bulleted list of what is missing (one line each, no preamble)
+- One sentence describing what would make it buildable
+
+Be specific rather than long. "This is unclear" helps nobody; neither does three paragraphs of
+reasoning. If the wording could mean two different things, name both in one line and stop. Do not
+restate the ticket back, do not narrate your process, and do not repeat a point you have made.
 
 Then **stop**. Declining is a successful outcome, not a failure.
 
@@ -91,12 +96,15 @@ what you tested, and anything you decided that the ticket did not specify.
 ./scripts/jira.sh comment {{ISSUE_KEY}} "<your report>"
 ```
 
-The comment must contain, in plain language a non-engineer can follow:
+**Keep it short — under 150 words.** In plain language a non-engineer can follow:
 - what you built, in one or two sentences
 - the pull request URL
 - the preview URL
 - **how to check it** — what to click, what to look for
 - anything you assumed because the ticket did not say
+
+The technical detail belongs in the PR body, not here. This comment is read by a reviewer
+deciding whether to approve, and by an audience watching over their shoulder.
 
 ## Rules
 

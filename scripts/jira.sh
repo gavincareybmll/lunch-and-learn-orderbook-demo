@@ -68,21 +68,24 @@ print(txt.strip())
 
 # Build an ADF doc from plain text, optionally prefixed with a real mention node.
 # Blank lines separate paragraphs; everything else is literal.
+#
+# Every comment opens with an attribution line. The API token belongs to a real person,
+# so without this the comment carries their name and avatar -- and an automated action
+# reads as a human one. The line is cheap and makes the automation honest.
 adf_from_text(){
   local text="$1" mention_id="${2:-}" mention_text="${3:-}"
   TEXT="$text" MID="$mention_id" MTEXT="$mention_text" python3 -c '
 import json,os
 text=os.environ["TEXT"]; mid=os.environ.get("MID",""); mtext=os.environ.get("MTEXT","") or "@PM"
-paras=[p for p in text.split("\n\n")]
-content=[]
-for i,p in enumerate(paras):
+content=[{"type":"paragraph","content":[
+    {"type":"text","text":"Factory agent \u00b7 automated","marks":[{"type":"strong"}]}]}]
+for i,p in enumerate(text.split("\n\n")):
     nodes=[]
     if i==0 and mid:
         nodes.append({"type":"mention","attrs":{"id":mid,"text":mtext if mtext.startswith("@") else "@"+mtext}})
         nodes.append({"type":"text","text":" "})
     if p: nodes.append({"type":"text","text":p})
     if nodes: content.append({"type":"paragraph","content":nodes})
-if not content: content=[{"type":"paragraph","content":[{"type":"text","text":"(no content)"}]}]
 print(json.dumps({"body":{"type":"doc","version":1,"content":content}}))
 '
 }
