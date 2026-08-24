@@ -2,3 +2,5 @@
 [build]
   publish = "public"
   command = ""
+
+# Verification: does a PR produce a Netlify deploy preview, and at what URL?
