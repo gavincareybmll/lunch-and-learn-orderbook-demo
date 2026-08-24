@@ -79,7 +79,12 @@ jobs:
       # Note: github_token is deliberately NOT passed. The action authenticates as the
       # Claude GitHub App, whose pushes DO trigger workflows — commits made with the
       # default GITHUB_TOKEN do not, which would leave the PR showing zero CI checks.
+      - name: Stamp start time
+        id: started
+        run: echo "epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
+
       - name: Run the agent
+        id: agent
         uses: anthropics/claude-code-action@v1
         env:
           ISSUE_KEY: ${{ steps.key.outputs.issue_key }}
@@ -101,6 +106,22 @@ jobs:
             --model claude-opus-5
             --max-turns 30
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
+
+      # Posts model, wall clock, turns, tokens and cost back to the ticket. The audience's
+      # first question after "it works" is "what did that cost?" -- having the answer on the
+      # ticket turns a demo into a decision-making conversation.
+      - name: Post run telemetry to Jira
+        if: always() && steps.started.outputs.epoch != ''
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        run: |
+          ./scripts/run-telemetry.sh \
+            "${{ steps.key.outputs.issue_key }}" \
+            "${{ steps.agent.outputs.execution_file }}" \
+            "${{ steps.started.outputs.epoch }}" \
+            "${{ steps.agent.outcome }}" || true
 
       - name: Report failure to Jira
         if: failure()
