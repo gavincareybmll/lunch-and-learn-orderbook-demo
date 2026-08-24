@@ -2,7 +2,10 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # feat/** included so the agent's tests-first commit produces its own CI run.
+    # That red run is the evidence that tests preceded the implementation, so it must
+    # not be cancelled or collapsed into the run for the following commit.
+    branches: [main, 'feat/**']
   pull_request:
 
 jobs:
