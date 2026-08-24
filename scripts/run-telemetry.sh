@@ -97,7 +97,12 @@ cwrite = usage.get("cache_creation_input_tokens") or 0
 if fresh or out or cread or cwrite:
     total_in = fresh + cread + cwrite
     lines.append(f"Input tokens: {total_in:,} ({cread:,} read from cache, {cwrite:,} written to cache, {fresh:,} fresh)")
-    lines.append(f"Output tokens: {out:,}")
+    thinking = ((usage.get("output_tokens_details") or {}).get("thinking_tokens")) or 0
+    if thinking:
+        pct = round(100 * thinking / out) if out else 0
+        lines.append(f"Output tokens: {out:,} (of which {thinking:,} thinking, {pct}%)")
+    else:
+        lines.append(f"Output tokens: {out:,}")
 
 cost = d.get("total_cost_usd")
 if cost is not None:
