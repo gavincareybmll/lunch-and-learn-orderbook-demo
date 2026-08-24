@@ -3,25 +3,103 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lunch &amp; Learn Orderbook Demo</title>
+<title>Orderbook Lab</title>
+<meta name="description" content="A synthetic Level 3 limit order book simulator. Every value on screen is generated in the browser.">
 <style>
-  :root { color-scheme: dark; }
-  body {
-    margin: 0; min-height: 100vh; display: grid; place-items: center;
-    background: #0e1420; color: #e6edf7;
-    font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* System fonts only: a web font would be a runtime network call (NFR-1). */
+  :root {
+    color-scheme: dark;
+    --paper: #080d1c;
+    --panel: #0d1428;
+    --rule: #1e2a4a;
+    --ink: #e8eefc;
+    --muted: #8fa0c4;
+    --ask: #ff9a90;
+    --bid: #59d69f;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   }
-  main { max-width: 42rem; padding: 2rem; text-align: center; }
-  h1 { font-size: 1.6rem; margin: 0 0 .5rem; letter-spacing: -.01em; }
-  p { color: #9fb0c9; margin: .5rem 0; }
-  code { background: #1a2436; padding: .15em .4em; border-radius: 4px; font-size: .9em; }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    /* A fixed height, so the ladder gets exactly the space left over and the page does not
+       scroll away from it on a projector. */
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    padding: 1.5rem clamp(1rem, 3vw, 2.5rem) 1.25rem;
+    background: var(--paper);
+    color: var(--ink);
+    font: 17px/1.55 var(--sans);
+  }
+
+  header { flex: none; }
+  h1 {
+    margin: 0;
+    font-size: clamp(1.35rem, 2.4vw, 1.9rem);
+    letter-spacing: -.01em;
+  }
+  .standfirst {
+    margin: .35rem 0 0;
+    max-width: 70ch;
+    color: var(--muted);
+    font-size: clamp(.92rem, 1.2vw, 1.02rem);
+  }
+  .standfirst strong { color: var(--ink); font-weight: 600; }
+
+  /* The ladder takes whatever height is left; min-height:0 lets it shrink inside the flex
+     column so the canvas can be measured rather than overflowing the viewport. */
+  .ladder-panel {
+    flex: 1 1 auto;
+    min-height: 14rem;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  #ladder { display: block; width: 100%; height: 100%; }
+
+  .legend {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35rem 1.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    color: var(--muted);
+    font-size: clamp(.82rem, 1.05vw, .95rem);
+  }
+  .legend b { color: var(--ink); font-weight: 600; }
+  .legend .sells b { color: var(--ask); }
+  .legend .buys b { color: var(--bid); }
+  .legend code { font-family: var(--mono); font-size: .95em; }
 </style>
 </head>
 <body>
-  <main>
-    <h1>Lunch &amp; Learn Orderbook Demo</h1>
-    <p>Placeholder. The application is built by the software factory, one ticket at a time.</p>
-    <p>The specification lives at <code>/prd.html</code>.</p>
+
+  <header>
+    <h1>Orderbook Lab</h1>
+    <p class="standfirst">A <strong>Level 3</strong> order book: every order is a separate order,
+      waiting its turn in the queue at its price. Buyers and sellers arrive, change their minds and
+      trade, continuously. Everything you see is invented in your browser - no real market data.</p>
+  </header>
+
+  <main class="ladder-panel">
+    <canvas id="ladder" role="img"
+      aria-label="Depth ladder. Sell orders above, buy orders below, with the best prices of each meeting in the middle. Each row shows a price, the total volume resting there and how many separate orders make it up."></canvas>
   </main>
+
+  <ul class="legend">
+    <li class="sells"><b>Above the line</b> sellers, cheapest offer nearest the middle</li>
+    <li class="buys"><b>Below the line</b> buyers, highest bid nearest the middle</li>
+    <li><b>Each row</b> one price: the volume resting there, and how many orders that is</li>
+    <li><b>Each bar</b> that level's size against the biggest one on screen</li>
+  </ul>
+
+  <script type="module" src="./src/app.js"></script>
 </body>
 </html>
