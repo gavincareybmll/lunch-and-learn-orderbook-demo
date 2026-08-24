@@ -93,7 +93,12 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: ${{ steps.prompt.outputs.text }}
+          # Model is PINNED deliberately. Left unset, the action uses whatever the
+          # Claude Code default is at the time — which can change between a rehearsal
+          # and the live session, silently altering behaviour and run time. Pin it,
+          # rehearse against it, demo on it.
           claude_args: |
+            --model claude-opus-5
             --max-turns 60
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
 
