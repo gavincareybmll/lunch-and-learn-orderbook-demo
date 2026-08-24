@@ -1,0 +1,15 @@
+# Credentials — never commit. Tokens live in ~/.config/factory/
+*token*.txt
+*.token
+.env
+.env.*
+!.env.example
+
+# Netlify
+.netlify/
+
+# Node
+node_modules/
+
+# OS
+.DS_Store

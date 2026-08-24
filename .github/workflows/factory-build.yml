@@ -1,0 +1,46 @@
+# STUB — proves the Jira -> repository_dispatch trigger path before agent logic exists.
+# repository_dispatch and workflow_dispatch only fire workflow files that exist on the
+# DEFAULT BRANCH, so this must be merged to main before it can ever be triggered.
+name: Factory Build
+
+on:
+  repository_dispatch:
+    types: [jira-build]
+  workflow_dispatch:
+    inputs:
+      issue_key:
+        description: "Jira issue key, e.g. LLD-12"
+        required: true
+        type: string
+
+# Key concurrency on the ISSUE, not the workflow: the demo deliberately runs two
+# tickets at once, and a workflow-level group would cancel one of them live on stage.
+concurrency:
+  group: factory-build-${{ github.event.client_payload.issue_key || inputs.issue_key }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Resolve issue key
+        id: key
+        run: |
+          KEY="${{ github.event.client_payload.issue_key || inputs.issue_key }}"
+          if [ -z "$KEY" ]; then
+            echo "::error::No issue key supplied in client_payload or inputs"
+            exit 1
+          fi
+          echo "issue_key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "Triggered for $KEY by ${{ github.actor }} via ${{ github.event_name }}"
+
+      - name: Echo payload
+        run: |
+          echo "issue_key : ${{ steps.key.outputs.issue_key }}"
+          echo "event     : ${{ github.event_name }}"
+          echo "actor     : ${{ github.actor }}"
+          echo "--- raw client_payload ---"
+          cat <<'PAYLOAD'
+          ${{ toJSON(github.event.client_payload) }}
+          PAYLOAD

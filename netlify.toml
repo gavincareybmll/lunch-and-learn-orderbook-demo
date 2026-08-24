@@ -1,0 +1,4 @@
+# No build step by design — plain ES modules and static HTML, served as-is.
+[build]
+  publish = "public"
+  command = ""

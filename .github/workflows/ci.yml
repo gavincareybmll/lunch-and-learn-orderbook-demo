@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      # No dependencies by design — the test runner is built into Node.
+      # Passes cleanly before any tests exist.
+      - name: Run tests
+        run: |
+          if compgen -G "test/*.test.js" > /dev/null; then
+            node --test
+          else
+            echo "No tests yet — skipping."
+          fi
