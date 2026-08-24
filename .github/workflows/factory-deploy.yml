@@ -1,0 +1,121 @@
+# Triggered by Jira moving a ticket to "Ready for Deployment" — after a human has reviewed it.
+#
+# repository_dispatch and workflow_dispatch only fire workflow files that exist on the
+# DEFAULT BRANCH, so changes here take effect only once merged to main. The agent's
+# instructions live in .factory/deploy-prompt.md, which this reads at runtime — so the
+# prompt can be iterated without touching this file.
+name: Factory Deploy
+
+on:
+  repository_dispatch:
+    types: [jira-deploy]
+  workflow_dispatch:
+    inputs:
+      issue_key:
+        description: "Jira issue key, e.g. LLD-12"
+        required: true
+        type: string
+
+# Key concurrency on the ISSUE, not the workflow: the demo deliberately runs two tickets
+# at once, and a workflow-level group would cancel one of them live on stage.
+concurrency:
+  group: factory-deploy-${{ github.event.client_payload.issue_key || inputs.issue_key }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Resolve issue key
+        id: key
+        run: |
+          KEY="${{ github.event.client_payload.issue_key || inputs.issue_key }}"
+          if [ -z "$KEY" ]; then
+            echo "::error::No issue key supplied in client_payload or inputs"
+            exit 1
+          fi
+          # Guard against anything that isn't a Jira key reaching a shell or a URL
+          if ! printf '%s' "$KEY" | grep -qE '^[A-Z][A-Z0-9]+-[0-9]+$'; then
+            echo "::error::Refusing to run: '$KEY' is not a valid Jira issue key"
+            exit 1
+          fi
+          echo "issue_key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "Deploying $KEY (triggered by ${{ github.actor }} via ${{ github.event_name }})"
+
+      - name: Install Netlify CLI
+        run: npm install -g netlify-cli@latest
+
+      - name: Configure git identity
+        run: |
+          git config user.name "factory-agent"
+          git config user.email "factory-agent@users.noreply.github.com"
+
+      - name: Load agent prompt
+        id: prompt
+        env:
+          KEY: ${{ steps.key.outputs.issue_key }}
+        run: |
+          {
+            echo 'text<<FACTORY_PROMPT_EOF'
+            sed "s/{{ISSUE_KEY}}/${KEY}/g" .factory/deploy-prompt.md
+            echo 'FACTORY_PROMPT_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      # Note: github_token is deliberately NOT passed. The action authenticates as the
+      # Claude GitHub App, whose pushes DO trigger workflows — commits made with the
+      # default GITHUB_TOKEN do not, which would leave the PR showing zero CI checks.
+      - name: Run the agent
+        uses: anthropics/claude-code-action@v1
+        env:
+          ISSUE_KEY: ${{ steps.key.outputs.issue_key }}
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          PM_ACCOUNT_ID: ${{ secrets.PM_ACCOUNT_ID }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: ${{ steps.prompt.outputs.text }}
+          # Model is PINNED deliberately. Left unset, the action uses whatever the
+          # Claude Code default is at the time — which can change between a rehearsal
+          # and the live session, silently altering behaviour and run time. Pin it,
+          # rehearse against it, demo on it.
+          claude_args: |
+            --model claude-opus-5
+            --max-turns 30
+            --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
+
+      - name: Report failure to Jira
+        if: failure()
+        env:
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
+          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          PM_ACCOUNT_ID: ${{ secrets.PM_ACCOUNT_ID }}
+          KEY: ${{ steps.key.outputs.issue_key }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          # A silent run is a failed run — make sure the ticket never sits in limbo
+          ./scripts/jira.sh transition "$KEY" "Needs Info" || true
+          ./scripts/jira.sh comment "$KEY" \
+            "The deploy agent stopped without shipping this ticket. Nothing was merged. This is a factory problem, not a problem with the ticket.
+
+          Run log: $RUN_URL" \
+            --mention "$PM_ACCOUNT_ID" --mention-name "Gavin Carey" || true
