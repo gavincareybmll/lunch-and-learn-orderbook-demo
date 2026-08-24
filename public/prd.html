@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orderbook Lab PRD</title>
+<meta name="description" content="Product Requirements Document for a synthetic Level 3 order book simulator, built by an agentic software factory.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=Jost:wght@400;500;600;700&display=swap">
+<style>
+/* ---------------------------------------------------------------------------
+   Palette taken from bmlltech.com's own design tokens:
+     --color-new-dark-blue #1c295f   --color-midnight     #1e2257
+     --color-blue          #146bc1   --color-new-light-blue #00b1e6
+     --color-brand-50      #effafd   --color-frosty       #ccebf9
+     --color-new-green     #00b44b   --color-orange       #ff8a41
+   BMLL's display face is Futura PT, licensed via Adobe Typekit and restricted
+   to their domains, so it cannot be used here. Jost is the open geometric sans
+   modelled on Futura and stands in for it; IBM Plex Sans carries running text,
+   which a Futura-like face reads poorly at length.
+--------------------------------------------------------------------------- */
+:root{
+  --paper:#FFFFFF; --surface:#F7F9FB; --raise:#FFFFFF;
+  --ink:#1E2257; --ink-2:#3E4665; --muted:#707070;
+  --rule:#E4E7EC; --rule-strong:#D0D6DE;
+  --brand-navy:#1C295F; --brand-blue:#146BC1; --brand-cyan:#00B1E6; --brand-frost:#CCEBF9;
+  --accent:#146BC1;
+  --ok:#00843A; --warn:#B25E15; --crit:#A32C2C;
+  --chip-bg:#EFFAFD; --chip-ink:#125C9E;
+  --inv-bg:#F4F8FC; --inv-edge:#1C295F;
+  --shadow:0 1px 2px rgba(28,41,95,.05), 0 8px 24px -12px rgba(28,41,95,.20);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0C1230; --surface:#141B3C; --raise:#18204A;
+    --ink:#E9EFFA; --ink-2:#B5C0DC; --muted:#8590B0;
+    --rule:#26305C; --rule-strong:#36426F;
+    --accent:#3FC3EE; --brand-cyan:#3FC3EE;
+    --ok:#4CC47E; --warn:#E0A25C; --crit:#E8807C;
+    --chip-bg:#132A4D; --chip-ink:#8ED8F2;
+    --inv-bg:#121A3E; --inv-edge:#3FC3EE;
+    --shadow:0 1px 2px rgba(0,0,0,.45), 0 8px 24px -12px rgba(0,0,0,.65);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0C1230; --surface:#141B3C; --raise:#18204A;
+  --ink:#E9EFFA; --ink-2:#B5C0DC; --muted:#8590B0;
+  --rule:#26305C; --rule-strong:#36426F;
+  --accent:#3FC3EE; --brand-cyan:#3FC3EE;
+  --ok:#4CC47E; --warn:#E0A25C; --crit:#E8807C;
+  --chip-bg:#132A4D; --chip-ink:#8ED8F2;
+  --inv-bg:#121A3E; --inv-edge:#3FC3EE;
+  --shadow:0 1px 2px rgba(0,0,0,.45), 0 8px 24px -12px rgba(0,0,0,.65);
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto} *{animation:none!important;transition:none!important}}
+
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size:16.5px; line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+
+/* ---------- masthead ---------- */
+.masthead{
+  border-bottom:1px solid var(--rule);
+  background:linear-gradient(180deg, var(--surface), var(--paper));
+}
+.masthead-inner{max-width:1180px; margin:0 auto; padding:2.75rem 2rem 2.25rem;}
+.eyebrow{
+  font-family:"IBM Plex Mono", ui-monospace, monospace;
+  font-size:.72rem; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--muted); margin:0 0 .9rem;
+}
+.masthead h1{
+  font-family:"Jost", "Futura", "Century Gothic", ui-sans-serif, sans-serif;
+  font-weight:700; font-size:clamp(2rem, 4.2vw, 3rem); line-height:1.1;
+  margin:0 0 .6rem; letter-spacing:-.015em; text-wrap:balance;
+  color:var(--ink);
+}
+.masthead .standfirst{
+  margin:0; max-width:60ch; color:var(--ink-2); font-size:1.06rem;
+}
+.brandrule{height:3px; width:100%; margin-top:1.75rem; border-radius:2px;
+  background:linear-gradient(90deg,var(--brand-navy),var(--brand-blue),var(--brand-cyan),var(--brand-frost));}
+.meta{
+  display:flex; flex-wrap:wrap; gap:.5rem 1.75rem; margin:1.5rem 0 0; padding:0; list-style:none;
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.76rem; color:var(--muted);
+}
+.meta b{color:var(--ink-2); font-weight:500}
+
+/* ---------- shell ---------- */
+.shell{max-width:1180px; margin:0 auto; padding:0 2rem 6rem;
+  display:grid; grid-template-columns:15rem minmax(0,1fr); gap:3.5rem; align-items:start;}
+@media (max-width:920px){ .shell{grid-template-columns:1fr; gap:0; padding-bottom:4rem} }
+
+/* ---------- table of contents ---------- */
+.toc{position:sticky; top:1.5rem; padding:2.5rem 0 0; font-size:.86rem;}
+@media (max-width:920px){
+  .toc{position:static; padding:1.75rem 0 0; border-bottom:1px solid var(--rule); margin-bottom:1.5rem}
+}
+.toc h2{
+  font-family:"IBM Plex Mono", ui-monospace, monospace;
+  font-size:.7rem; letter-spacing:.14em; text-transform:uppercase; color:var(--muted);
+  margin:0 0 .85rem; font-weight:500;
+}
+.toc ol{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.15rem}
+.toc a{
+  display:block; padding:.3rem .6rem; border-radius:5px; text-decoration:none;
+  color:var(--ink-2); border-left:2px solid transparent;
+}
+.toc a:hover{background:var(--surface); color:var(--accent)}
+.toc a:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
+.toc .num{font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.78em; color:var(--muted); margin-right:.5rem}
+
+/* ---------- prose ---------- */
+main{padding-top:2.5rem; min-width:0}
+section{scroll-margin-top:1.5rem; margin:0 0 3.25rem}
+main h2{
+  font-family:"Jost", "Futura", "Century Gothic", ui-sans-serif, sans-serif; font-weight:600;
+  font-size:1.62rem; line-height:1.25; letter-spacing:-.012em;
+  margin:0 0 1rem; padding-bottom:.55rem; border-bottom:1px solid var(--rule);
+  text-wrap:balance; display:flex; align-items:baseline; gap:.7rem;
+}
+main h2 .sec{
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.78rem;
+  color:var(--accent); font-weight:500; letter-spacing:.02em;
+}
+main h3{
+  font-family:"IBM Plex Sans", sans-serif; font-weight:600; font-size:1.02rem;
+  margin:2rem 0 .6rem; letter-spacing:-.005em;
+}
+p{margin:0 0 1rem; max-width:68ch}
+main ul, main ol{max-width:68ch; margin:0 0 1rem; padding-left:1.25rem}
+main li{margin:.3rem 0}
+strong{font-weight:600}
+a{color:var(--accent)}
+code{
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.87em;
+  background:var(--surface); padding:.12em .4em; border-radius:4px;
+  border:1px solid var(--rule);
+}
+
+/* ---------- requirement blocks ---------- */
+.req{
+  background:var(--raise); border:1px solid var(--rule); border-radius:9px;
+  padding:1.15rem 1.3rem; margin:0 0 1.1rem; box-shadow:var(--shadow);
+  scroll-margin-top:1.5rem;
+}
+.req-head{display:flex; align-items:baseline; gap:.75rem; flex-wrap:wrap; margin-bottom:.5rem}
+.rid{
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-weight:600; font-size:.75rem;
+  background:var(--chip-bg); color:var(--chip-ink); padding:.22em .55em; border-radius:5px;
+  letter-spacing:.02em; text-decoration:none; white-space:nowrap;
+}
+.rid:hover{outline:1px solid var(--accent)}
+.req-title{font-weight:600; font-size:1rem; margin:0; color:var(--ink)}
+.req p{margin:.35rem 0 .6rem; color:var(--ink-2); max-width:66ch}
+.req p:last-child{margin-bottom:0}
+
+.ac{
+  margin:.8rem 0 0; padding:.75rem .9rem; background:var(--surface);
+  border:1px solid var(--rule); border-radius:7px;
+}
+.ac-label{
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.66rem;
+  letter-spacing:.13em; text-transform:uppercase; color:var(--muted); margin:0 0 .5rem;
+}
+.ac ul{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:.55rem}
+.ac li{
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.8rem; line-height:1.55;
+  color:var(--ink-2); margin:0;
+}
+.gwt{color:var(--accent); font-weight:600}
+
+/* invariants get their own visual weight — they are the correctness contract */
+.req.inv{background:var(--inv-bg); border-left:3px solid var(--inv-edge)}
+
+/* ---------- callout ---------- */
+.note{
+  border-left:3px solid var(--accent); background:var(--surface);
+  padding:.9rem 1.1rem; border-radius:0 7px 7px 0; margin:0 0 1.25rem;
+}
+.note p{margin:0; max-width:64ch; color:var(--ink-2)}
+.note p + p{margin-top:.6rem}
+.note.hard{border-left-color:var(--crit)}
+
+/* ---------- tables ---------- */
+.tablewrap{overflow-x:auto; margin:0 0 1.25rem; border:1px solid var(--rule); border-radius:8px}
+table{border-collapse:collapse; width:100%; font-size:.88rem; min-width:34rem}
+th,td{text-align:left; padding:.6rem .85rem; border-bottom:1px solid var(--rule); vertical-align:top}
+th{
+  background:var(--surface); font-weight:600; font-size:.72rem; letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted);
+}
+tbody tr:last-child td{border-bottom:none}
+td code{background:transparent; border:none; padding:0; color:var(--accent)}
+
+/* ---------- signature blocks ---------- */
+pre{
+  font-family:"IBM Plex Mono", ui-monospace, monospace; font-size:.81rem; line-height:1.6;
+  background:var(--surface); border:1px solid var(--rule); border-radius:8px;
+  padding:1rem 1.1rem; overflow-x:auto; margin:0 0 1.25rem; color:var(--ink-2);
+}
+pre .c{color:var(--muted); font-style:italic}
+pre .k{color:var(--accent); font-weight:500}
+
+footer{
+  max-width:1180px; margin:0 auto; padding:2rem; border-top:1px solid var(--rule);
+  color:var(--muted); font-size:.83rem;
+}
+footer p{max-width:70ch; margin:0 0 .4rem}
+
+@media print{
+  .toc{display:none} .shell{grid-template-columns:1fr; padding:0}
+  body{background:#fff; color:#000; font-size:11pt}
+  .req{break-inside:avoid; box-shadow:none}
+}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <div class="masthead-inner">
+    <p class="eyebrow">Product Requirements Document · v1.0 · Draft</p>
+    <h1>Orderbook Lab</h1>
+    <p class="standfirst">A synthetic Level&nbsp;3 limit order book simulator, specified here and built
+      entirely by an agentic software factory — one Jira ticket at a time.</p>
+    <ul class="meta">
+      <li><b>Author</b> Gavin Carey</li>
+      <li><b>Status</b> Draft for review</li>
+      <li><b>Repository</b> lunch-and-learn-orderbook-demo</li>
+      <li><b>Jira project</b> LLD</li>
+    </ul>
+    <div class="brandrule"></div>
+  </div>
+</header>
+
+<div class="shell">
+
+  <nav class="toc" aria-label="Contents">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#purpose"><span class="num">1</span>Purpose</a></li>
+      <li><a href="#users"><span class="num">2</span>Users</a></li>
+      <li><a href="#scope"><span class="num">3</span>Scope</a></li>
+      <li><a href="#functional"><span class="num">4</span>Functional requirements</a></li>
+      <li><a href="#invariants"><span class="num">5</span>Invariants</a></li>
+      <li><a href="#contracts"><span class="num">6</span>Module contracts</a></li>
+      <li><a href="#nfr"><span class="num">7</span>Constraints</a></li>
+      <li><a href="#headroom"><span class="num">8</span>Deliberately out of scope</a></li>
+      <li><a href="#howread"><span class="num">9</span>How this document is used</a></li>
+    </ol>
+  </nav>
+
+  <main>
+
+    <section id="purpose">
+      <h2><span class="sec">01</span>Purpose</h2>
+      <p>Orderbook Lab is a browser-based simulation of a Level&nbsp;3 limit order book. It shows
+        resting orders at each price level, prints trades as they occur, and tracks the resulting
+        price over time — all driven by a synthetic order flow generator running locally in the page.</p>
+      <p>Its real purpose is to be <em>built in public</em>. Every line of the application is written
+        by an AI agent responding to a Jira ticket, and this document is the specification those
+        tickets are written against. It exists to demonstrate that a well-written requirement is
+        sufficient input for working, tested, deployed software.</p>
+
+      <div class="note hard">
+        <p><strong>This is a demonstrator, not a product.</strong> It is not affiliated with, and must
+          not be presented as, any BMLL product.</p>
+        <p>Every value it displays is generated by a pseudo-random function in the browser. There is
+          no market data here — no licensed feed, no real venue, no real instrument, and no
+          connection to any BMLL system. This constraint is absolute and is restated as
+          <a href="#NFR-1"><code>NFR-1</code></a>.</p>
+      </div>
+    </section>
+
+    <section id="users">
+      <h2><span class="sec">02</span>Users</h2>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>User</th><th>What they need from it</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Session audience</strong><br>mixed technical background</td>
+                <td>To understand at a glance what they are looking at, and to see their own
+                    requested change appear in it within minutes.</td></tr>
+            <tr><td><strong>Ticket author</strong><br>anyone at BMLL</td>
+                <td>To describe a change in business language and have it built without writing code
+                    or talking to an engineer.</td></tr>
+            <tr><td><strong>The agent</strong></td>
+                <td>An unambiguous specification with testable criteria and stated module boundaries,
+                    so that it can either implement correctly or decline with a specific reason.</td></tr>
+            <tr><td><strong>Reviewer</strong></td>
+                <td>To confirm from a deploy preview that a change does what its ticket asked, without
+                    reading the diff.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="scope">
+      <h2><span class="sec">03</span>Scope</h2>
+      <p>Version 1.0 is a <strong>complete but deliberately unembellished</strong> application. It must
+        be genuinely working and genuinely correct — not a mock-up — while leaving obvious, visible
+        room for enhancement. That headroom is the demonstration surface, and is listed in
+        <a href="#headroom">§8</a>.</p>
+      <h3>In scope</h3>
+      <ul>
+        <li>A price–time priority matching engine for limit and market orders</li>
+        <li>A seeded synthetic order flow generator</li>
+        <li>A depth-of-book ladder, a trade tape, a price chart, and a top-of-book readout</li>
+        <li>Playback controls</li>
+      </ul>
+      <h3>Not in scope</h3>
+      <ul>
+        <li>Any real, recorded, or licensed market data</li>
+        <li>Any server, persistence, authentication, or network call at runtime</li>
+        <li>Multiple venues, order types beyond limit and market, or auction phases</li>
+      </ul>
+    </section>
+
+    <section id="functional">
+      <h2><span class="sec">04</span>Functional requirements</h2>
+      <p>Each requirement carries a stable identifier. Tickets cite them, and the acceptance criteria
+        below become test names verbatim — see <a href="#howread">§9</a>.</p>
+
+      <article class="req" id="REQ-1">
+        <div class="req-head"><a class="rid" href="#REQ-1">REQ-1</a><h3 class="req-title">Limit orders rest on the book</h3></div>
+        <p>A limit order that cannot immediately execute is added to the book at its price level and
+          remains available to later orders until filled or cancelled.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> an empty book, <span class="gwt">when</span> a buy limit order for 100 at 99 is submitted, <span class="gwt">then</span> the best bid is 99 with size 100.</li>
+          <li><span class="gwt">Given</span> a book with a resting bid of 100 at 99, <span class="gwt">when</span> a further buy limit order for 50 at 99 is submitted, <span class="gwt">then</span> the best bid is 99 with size 150.</li>
+        </ul></div>
+      </article>
+
+      <article class="req" id="REQ-2">
+        <div class="req-head"><a class="rid" href="#REQ-2">REQ-2</a><h3 class="req-title">Crossing limit orders execute immediately</h3></div>
+        <p>A limit order priced at or through the opposite side of the book executes against the
+          resting orders it crosses. Any unfilled remainder rests at its limit price.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> a resting ask of 100 at 101, <span class="gwt">when</span> a buy limit order for 60 at 101 is submitted, <span class="gwt">then</span> a trade of 60 at 101 is produced and the best ask is 101 with size 40.</li>
+          <li><span class="gwt">Given</span> a resting ask of 100 at 101, <span class="gwt">when</span> a buy limit order for 150 at 101 is submitted, <span class="gwt">then</span> a trade of 100 at 101 is produced and the best bid is 101 with size 50.</li>
+        </ul></div>
+      </article>
+
+      <article class="req" id="REQ-3">
+        <div class="req-head"><a class="rid" href="#REQ-3">REQ-3</a><h3 class="req-title">Market orders consume available liquidity</h3></div>
+        <p>A market order executes against the best available prices in sequence until it is filled or
+          the book is exhausted. It never rests.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> resting asks of 50 at 101 and 50 at 102, <span class="gwt">when</span> a buy market order for 80 is submitted, <span class="gwt">then</span> trades of 50 at 101 and 30 at 102 are produced in that order.</li>
+          <li><span class="gwt">Given</span> an empty ask side, <span class="gwt">when</span> a buy market order for 10 is submitted, <span class="gwt">then</span> no trade is produced and nothing rests on the book.</li>
+        </ul></div>
+      </article>
+
+      <article class="req" id="REQ-4">
+        <div class="req-head"><a class="rid" href="#REQ-4">REQ-4</a><h3 class="req-title">Orders can be cancelled</h3></div>
+        <p>A resting order may be removed by its identifier. Cancelling an unknown or already-filled
+          order is reported as unsuccessful rather than raising an error.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> a resting bid of 100 at 99, <span class="gwt">when</span> that order is cancelled, <span class="gwt">then</span> cancellation reports success and the price level 99 is absent from the book.</li>
+          <li><span class="gwt">Given</span> an empty book, <span class="gwt">when</span> an unknown order id is cancelled, <span class="gwt">then</span> cancellation reports failure and the book is unchanged.</li>
+        </ul></div>
+      </article>
+
+      <article class="req" id="REQ-5">
+        <div class="req-head"><a class="rid" href="#REQ-5">REQ-5</a><h3 class="req-title">Synthetic order flow is reproducible</h3></div>
+        <p>Order flow is produced by a seeded generator. The same seed must produce an identical
+          sequence of events, so that a failing test can be reproduced exactly.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> two generators created with the same seed, <span class="gwt">when</span> each produces 1000 events, <span class="gwt">then</span> the two sequences are identical.</li>
+          <li><span class="gwt">Given</span> two generators created with different seeds, <span class="gwt">when</span> each produces 1000 events, <span class="gwt">then</span> the two sequences differ.</li>
+        </ul></div>
+      </article>
+
+      <article class="req" id="REQ-6">
+        <div class="req-head"><a class="rid" href="#REQ-6">REQ-6</a><h3 class="req-title">Order flow is a plausible mix</h3></div>
+        <p>The generator emits new limit orders, cancellations of resting orders, and market orders,
+          clustered around the current touch so that the book remains populated and active over time.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> a generator run for 5000 events against a book, <span class="gwt">when</span> the event types are counted, <span class="gwt">then</span> all three of limit, cancel and market are present.</li>
+          <li><span class="gwt">Given</span> a generator run for 5000 events, <span class="gwt">when</span> the book is inspected at each step, <span class="gwt">then</span> both sides are non-empty for at least 95% of steps.</li>
+        </ul></div>
+      </article>
+
+      <article class="req" id="REQ-7">
+        <div class="req-head"><a class="rid" href="#REQ-7">REQ-7</a><h3 class="req-title">Depth ladder</h3></div>
+        <p>The page renders a vertical ladder of price levels with bids below and asks above, each level
+          showing its price and total resting size, with size represented as a proportional horizontal
+          bar. The ladder updates continuously as flow arrives.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> a book with five levels a side, <span class="gwt">when</span> depth is requested for three levels, <span class="gwt">then</span> exactly three bid levels and three ask levels are returned, best-first.</li>
+          <li><span class="gwt">Given</span> a book with levels of differing size, <span class="gwt">when</span> depth is returned, <span class="gwt">then</span> each level carries its price, its aggregate size, and its order count.</li>
+        </ul></div>
+      </article>
+
+      <article class="req" id="REQ-8">
+        <div class="req-head"><a class="rid" href="#REQ-8">REQ-8</a><h3 class="req-title">Trade tape</h3></div>
+        <p>Executed trades print in a running list, most recent first, each showing price, size and
+          time. The list is bounded so it does not grow without limit.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> a tape bounded to 50 entries, <span class="gwt">when</span> 60 trades occur, <span class="gwt">then</span> the tape holds 50 entries and the oldest 10 have been discarded.</li>
+          <li><span class="gwt">Given</span> a trade occurs, <span class="gwt">when</span> the tape is read, <span class="gwt">then</span> the newest trade is first.</li>
+        </ul></div>
+      </article>
+
+      <article class="req" id="REQ-9">
+        <div class="req-head"><a class="rid" href="#REQ-9">REQ-9</a><h3 class="req-title">Top-of-book readout</h3></div>
+        <p>Best bid, best ask, mid price and absolute spread are displayed numerically and update as
+          the book changes.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> a best bid of 99 and a best ask of 101, <span class="gwt">when</span> the readout is computed, <span class="gwt">then</span> mid is 100 and spread is 2.</li>
+          <li><span class="gwt">Given</span> a book with one side empty, <span class="gwt">when</span> the readout is computed, <span class="gwt">then</span> mid and spread are reported as unavailable rather than as a number.</li>
+        </ul></div>
+      </article>
+
+      <article class="req" id="REQ-10">
+        <div class="req-head"><a class="rid" href="#REQ-10">REQ-10</a><h3 class="req-title">Price chart</h3></div>
+        <p>A rolling line chart plots the mid price over a fixed recent window, so that the effect of
+          order flow on price is visible over time.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> a series bounded to 300 points, <span class="gwt">when</span> 400 mid prices are recorded, <span class="gwt">then</span> the series holds the most recent 300.</li>
+          <li><span class="gwt">Given</span> a period during which mid is unavailable, <span class="gwt">when</span> the series is recorded, <span class="gwt">then</span> those periods are omitted rather than recorded as zero.</li>
+        </ul></div>
+      </article>
+
+      <article class="req" id="REQ-11">
+        <div class="req-head"><a class="rid" href="#REQ-11">REQ-11</a><h3 class="req-title">Playback controls</h3></div>
+        <p>The simulation can be paused and resumed. While paused the display holds its last state and
+          no further flow is generated.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> a running simulation, <span class="gwt">when</span> pause is activated, <span class="gwt">then</span> no further events are applied to the book.</li>
+          <li><span class="gwt">Given</span> a paused simulation, <span class="gwt">when</span> resume is activated, <span class="gwt">then</span> events continue from the point at which it paused.</li>
+        </ul></div>
+      </article>
+
+      <article class="req" id="REQ-12">
+        <div class="req-head"><a class="rid" href="#REQ-12">REQ-12</a><h3 class="req-title">Legible without explanation</h3></div>
+        <p>A viewer with no market-structure background can tell, unaided, which side is buying, which
+          is selling, and where the current price is. Sides are visually distinguished and the touch is
+          the visual centre of the ladder.</p>
+        <div class="ac"><p class="ac-label">Acceptance criteria</p><ul>
+          <li><span class="gwt">Given</span> the page at rest, <span class="gwt">when</span> it is viewed, <span class="gwt">then</span> bid and ask sides are distinguished by colour and are labelled in words.</li>
+          <li><span class="gwt">Given</span> the page at rest, <span class="gwt">when</span> it is viewed, <span class="gwt">then</span> the current mid price is the most prominent number on screen.</li>
+        </ul></div>
+      </article>
+    </section>
+
+    <section id="invariants">
+      <h2><span class="sec">05</span>Invariants</h2>
+      <p>The requirements above describe what the application does in specific cases. The invariants
+        below must hold for <strong>every</strong> input, and are verified by running randomised order
+        flow through the engine and asserting each property after every event.</p>
+
+      <div class="note">
+        <p>These are the correctness contract. Where an acceptance criterion checks one example, an
+          invariant checks the entire input space — which is what makes it capable of catching a
+          defect nobody thought to write a test for.</p>
+        <p>When one fails, the failing seed is printed. Re-running with that seed reproduces the
+          failure exactly, per <a href="#REQ-5"><code>REQ-5</code></a>.</p>
+      </div>
+
+      <article class="req inv" id="INV-1">
+        <div class="req-head"><a class="rid" href="#INV-1">INV-1</a><h3 class="req-title">The book never crosses</h3></div>
+        <p>Whenever both sides are populated, the best bid is strictly less than the best ask. A crossed
+          book means two orders that should have matched did not.</p>
+      </article>
+
+      <article class="req inv" id="INV-2">
+        <div class="req-head"><a class="rid" href="#INV-2">INV-2</a><h3 class="req-title">Volume is conserved</h3></div>
+        <p>Matching neither creates nor destroys quantity. For any event, the total size traded equals
+          the reduction in resting size on the passive side, and no order fills for more than its
+          original size.</p>
+      </article>
+
+      <article class="req inv" id="INV-3">
+        <div class="req-head"><a class="rid" href="#INV-3">INV-3</a><h3 class="req-title">Price–time priority is respected</h3></div>
+        <p>Among resting orders at the same price, the one submitted earliest fills first. This is a
+          business rule rather than a structural property, and is the one a naive implementation is
+          most likely to get wrong.</p>
+      </article>
+
+      <article class="req inv" id="INV-4">
+        <div class="req-head"><a class="rid" href="#INV-4">INV-4</a><h3 class="req-title">No trade-through</h3></div>
+        <p>No execution occurs at a price worse than the best available on the passive side at the
+          moment of execution. Liquidity is always consumed best-price-first.</p>
+      </article>
+
+      <article class="req inv" id="INV-5">
+        <div class="req-head"><a class="rid" href="#INV-5">INV-5</a><h3 class="req-title">The book is well-formed</h3></div>
+        <p>No resting order has a size of zero or less; no price level exists with no orders on it; and
+          no cancelled or fully-filled order remains reachable.</p>
+      </article>
+    </section>
+
+    <section id="contracts">
+      <h2><span class="sec">06</span>Module contracts</h2>
+      <p>The following boundaries are fixed by this document rather than chosen during implementation,
+        so that each ticket extends a known structure instead of inventing one. A ticket that would
+        require changing these signatures should say so and be re-specified.</p>
+
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Module</th><th>Responsibility</th><th>May import</th></tr></thead>
+          <tbody>
+            <tr><td><code>public/src/engine.js</code></td><td>Order book state and matching. Pure logic, no timers, no DOM.</td><td>nothing</td></tr>
+            <tr><td><code>public/src/sim.js</code></td><td>Seeded synthetic order flow. No DOM.</td><td><code>engine.js</code></td></tr>
+            <tr><td><code>public/src/render.js</code></td><td>Drawing to canvas and DOM. Holds no simulation state.</td><td>nothing</td></tr>
+            <tr><td><code>public/src/app.js</code></td><td>Wiring: the animation loop, controls, and glue.</td><td>all of the above</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h3>Engine surface</h3>
+<pre><span class="c">// A Level is { price, size, orders }.  A Trade is
+// { price, size, ts, aggressorSide, makerOrderId, takerOrderId }.
+// Side is 'bid' | 'ask'.  Functions mutate the book and return results.</span>
+
+<span class="k">export function</span> createBook()                        <span class="c">// -&gt; Book</span>
+<span class="k">export function</span> addLimitOrder(book, order)           <span class="c">// -&gt; Trade[]</span>
+<span class="k">export function</span> submitMarketOrder(book, order)       <span class="c">// -&gt; Trade[]</span>
+<span class="k">export function</span> cancelOrder(book, orderId)           <span class="c">// -&gt; boolean</span>
+<span class="k">export function</span> bestBid(book)                        <span class="c">// -&gt; Level | null</span>
+<span class="k">export function</span> bestAsk(book)                        <span class="c">// -&gt; Level | null</span>
+<span class="k">export function</span> depth(book, maxLevels)               <span class="c">// -&gt; { bids: Level[], asks: Level[] }</span>
+</pre>
+      <p>An <code>order</code> is <code>{ id, side, price, size, ts }</code>; <code>price</code> is
+        omitted for market orders.</p>
+
+      <h3>Simulator surface</h3>
+<pre><span class="k">export function</span> createSim(seed, config)              <span class="c">// -&gt; Sim</span>
+<span class="k">export function</span> step(sim, book)                      <span class="c">// -&gt; Trade[]  (applies one event)</span>
+</pre>
+      <p>Rendering functions take a target and a plain data structure, and return nothing. Their exact
+        signatures are settled by the ticket that first introduces each one.</p>
+    </section>
+
+    <section id="nfr">
+      <h2><span class="sec">07</span>Constraints</h2>
+
+      <article class="req" id="NFR-1">
+        <div class="req-head"><a class="rid" href="#NFR-1">NFR-1</a><h3 class="req-title">Synthetic data only</h3></div>
+        <p>All values are generated in the browser. No real, recorded, licensed or derived market data
+          may enter this repository, and no runtime network call may be made. Any ticket requesting a
+          real data source must be declined.</p>
+      </article>
+
+      <article class="req" id="NFR-2">
+        <div class="req-head"><a class="rid" href="#NFR-2">NFR-2</a><h3 class="req-title">No dependencies, no build step</h3></div>
+        <p>Native ES modules served as static files. Tests run under Node's built-in test runner. There
+          is no package manager, no bundler and no lockfile — every removed moving part is one fewer
+          way a live demonstration can fail.</p>
+      </article>
+
+      <article class="req" id="NFR-3">
+        <div class="req-head"><a class="rid" href="#NFR-3">NFR-3</a><h3 class="req-title">Readable on a projector</h3></div>
+        <p>Legible at the back of a meeting room: generous type, high contrast, and no information
+          conveyed by colour alone.</p>
+      </article>
+
+      <article class="req" id="NFR-4">
+        <div class="req-head"><a class="rid" href="#NFR-4">NFR-4</a><h3 class="req-title">Smooth at 60fps</h3></div>
+        <p>Rendering keeps up with the simulation on a laptop without a discrete GPU. Drawing is
+          decoupled from event generation so that a slow frame delays display, never the book.</p>
+      </article>
+
+      <article class="req" id="NFR-5">
+        <div class="req-head"><a class="rid" href="#NFR-5">NFR-5</a><h3 class="req-title">Tests derive from the specification</h3></div>
+        <p>Tests are written from this document and the ticket's acceptance criteria, and are committed
+          before the implementation they cover. They are never written by reading the implementation
+          back — that would only confirm the code does what it already does.</p>
+      </article>
+    </section>
+
+    <section id="headroom">
+      <h2><span class="sec">08</span>Deliberately out of scope</h2>
+      <p>The following are all reasonable, visible improvements that version 1.0 does
+        <strong>not</strong> include. They are omitted on purpose: they are the surface on which
+        further tickets are demonstrated, including tickets written by people who have never seen this
+        document.</p>
+      <ul>
+        <li>Spread expressed in basis points</li>
+        <li>A volume-weighted average price line on the chart</li>
+        <li>Playback speed control</li>
+        <li>Colouring the tape by aggressor side</li>
+        <li>A cumulative depth curve</li>
+        <li>Highlighting the touch when it moves</li>
+        <li>Order-count display per level</li>
+        <li>A light and dark theme</li>
+        <li>Session high and low</li>
+        <li>Top-of-book size imbalance</li>
+        <li>A control that injects a single large market order</li>
+        <li>Keyboard shortcuts</li>
+      </ul>
+      <p>Nothing in this list should be built as part of version 1.0, even if it would be trivial to
+        add while nearby.</p>
+    </section>
+
+    <section id="howread">
+      <h2><span class="sec">09</span>How this document is used</h2>
+      <p>This specification is read by an AI agent on every ticket, and it is the reason the agent can
+        accept some tickets and must decline others.</p>
+      <ol>
+        <li><strong>A ticket cites requirements.</strong> "Implements <code>REQ-7</code>" links to a
+          fixed definition rather than a shared assumption.</li>
+        <li><strong>Acceptance criteria become test names.</strong> The Given/When/Then above is
+          written to read sensibly as a test description, because that is what it becomes.</li>
+        <li><strong>Tests are committed before implementation.</strong> Per
+          <a href="#NFR-5"><code>NFR-5</code></a>, so that a test cannot have been shaped by the code
+          it checks.</li>
+        <li><strong>Invariants are checked continuously.</strong> Every change is run against
+          <a href="#invariants">§5</a>, not only against the criteria for its own ticket.</li>
+        <li><strong>A ticket that cannot be tested is declined.</strong> If a ticket has no criterion
+          that can be written as a test, the agent stops and asks for one rather than guessing.</li>
+      </ol>
+      <div class="note">
+        <p>Which is the whole argument in one line: <strong>what you specify is what you get.</strong>
+          The quality of this document sets the ceiling on the quality of everything built from it.</p>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<footer>
+  <p><strong>Orderbook Lab</strong> — Product Requirements Document, v1.0 draft.</p>
+  <p>A demonstrator built for an internal BMLL AI Lunch &amp; Learn session. Not a BMLL product.
+     All data synthetic. No licensed market data is used anywhere in this project.</p>
+</footer>
+
+</body>
+</html>
