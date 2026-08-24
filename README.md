@@ -7,19 +7,18 @@ deployed change with no human writing code.
 every number it displays is synthetically generated in the browser. There is no market data
 here — no licensed feed, no real venue, no real instrument.
 
-## What it is
+## Status
 
-A synthetic Level 3 limit order book simulator: a depth-of-book ladder, a trade tape, and a
-rolling price chart, all driven by a seeded pseudo-random order flow generator.
+Scaffolding only. The specification has not been written yet, and no application code exists.
 
-The specification it was built from is [`public/prd.html`](public/prd.html), served live at
-`/prd.html`.
+Once `public/prd.html` is agreed, the application will be built from it — by the agent, one
+ticket at a time. The structure of the code will follow from the specification, not precede it.
 
-## How it was built
+## How it gets built
 
-The scaffolding in this repository — the workflows, the agent prompts, the Jira toolkit — was
-written by hand. **The application itself was written by the agent**, ticket by ticket, through
-the pipeline described below. The Jira board's Done column is the record.
+The scaffolding in this repository — the workflows, the agent prompts, the Jira toolkit — is
+written by hand. **The application itself is written by the agent**, ticket by ticket, through
+the pipeline below. The Jira board's Done column is the record.
 
 ```
 Jira "Ready for Engineering"
@@ -33,7 +32,7 @@ Jira "Ready for Engineering"
 
 ## Running locally
 
-No dependencies, no build step. Node 20+ for the tests.
+No dependencies and no build step, by design. Node 20+ for the tests.
 
 ```bash
 node --test
@@ -47,12 +46,12 @@ python3 -m http.server -d public 8000
 
 | Path | Purpose |
 |---|---|
-| `public/prd.html` | Product Requirements Document — the source spec |
-| `public/src/engine.js` | Order book data structure and matching logic |
-| `public/src/sim.js` | Synthetic order flow generator (seeded) |
-| `public/src/render.js` | Canvas rendering |
-| `public/` | Everything Netlify serves — the whole published surface |
-| `test/` | Unit tests, run with `node --test` |
+| `public/` | Everything Netlify serves — the entire published surface |
+| `public/prd.html` | Product Requirements Document — the source specification |
 | `public/slides/` | Presentation material (hand-written, not factory-built) |
+| `test/` | Unit tests, run with `node --test` |
 | `.factory/` | Agent prompts |
 | `scripts/` | Jira toolkit and demo reset tooling |
+
+Application source will live under `public/src/`. Its module layout is deliberately left
+undefined here — see the PRD.
