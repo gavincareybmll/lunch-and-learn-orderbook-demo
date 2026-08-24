@@ -121,6 +121,7 @@ jobs:
             "${{ steps.key.outputs.issue_key }}" \
             "${{ steps.agent.outputs.execution_file }}" \
             "${{ steps.started.outputs.epoch }}" \
+            "build" \
             "${{ steps.agent.outcome }}" || true
 
       - name: Report failure to Jira

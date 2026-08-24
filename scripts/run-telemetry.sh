@@ -6,23 +6,36 @@
 # file claude-code-action writes; every field is optional, because a missing field
 # should degrade the comment, not fail the run.
 #
-# usage: run-telemetry.sh <ISSUE-KEY> <execution-file> <started-epoch> [outcome]
+# usage: run-telemetry.sh <ISSUE-KEY> <execution-file> <started-epoch> <phase> [outcome]
+#   phase is "build" or "deploy". On deploy, the earlier build cost is read back off the
+#   ticket so the comment can report what the whole thing cost, which is the number that
+#   actually lands with an audience.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
 KEY="${1:?issue key required}"
 FILE="${2:-}"
 STARTED="${3:-0}"
-OUTCOME="${4:-completed}"
+PHASE="${4:-build}"
+OUTCOME="${5:-completed}"
 
 NOW=$(date +%s)
 WALL=$(( NOW - STARTED ))
 [ "$STARTED" -eq 0 ] && WALL=0
 
-SUMMARY=$(FILE="$FILE" WALL="$WALL" OUTCOME="$OUTCOME" python3 - <<'PY'
+# On deploy, recover the build cost from the ticket's earlier telemetry comment.
+PRIOR_COST=""
+if [ "$PHASE" = "deploy" ]; then
+  PRIOR_COST=$(./scripts/jira.sh get "$KEY" 2>/dev/null \
+    | grep -oE 'Cost \(build\): \$[0-9]+\.[0-9]+' | head -1 | grep -oE '[0-9]+\.[0-9]+' || true)
+fi
+
+SUMMARY=$(FILE="$FILE" WALL="$WALL" OUTCOME="$OUTCOME" PHASE="$PHASE" PRIOR_COST="$PRIOR_COST" python3 - <<'PY'
 import json, os
 
 path, wall, outcome = os.environ["FILE"], int(os.environ["WALL"]), os.environ["OUTCOME"]
+phase = os.environ.get("PHASE", "build")
+prior = os.environ.get("PRIOR_COST", "")
 
 def hms(s):
     s = int(s)
@@ -43,7 +56,7 @@ try:
 except Exception:
     pass
 
-lines = ["Run telemetry"]
+lines = [f"Run telemetry \u00b7 {phase} phase"]
 
 models = [m for m in (d.get("modelUsage") or {})]
 main = [m for m in models if "haiku" not in m.lower()]
@@ -71,8 +84,14 @@ if tin or tout:
     if cache: bits.append(f"{cache:,} cached")
     lines.append("Tokens: " + ", ".join(bits))
 
-if d.get("total_cost_usd") is not None:
-    lines.append(f"Cost: ${d['total_cost_usd']:.2f}")
+cost = d.get("total_cost_usd")
+if cost is not None:
+    lines.append(f"Cost ({phase}): ${cost:.2f}")
+    if phase == "deploy" and prior:
+        try:
+            lines.append(f"Total for this ticket: ${float(prior) + cost:.2f} (build ${float(prior):.2f} + deploy ${cost:.2f})")
+        except ValueError:
+            pass
 
 if outcome != "completed":
     lines.append(f"Outcome: {outcome}")
