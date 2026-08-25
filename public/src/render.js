@@ -113,6 +113,12 @@ export function formatPrice(price) {
   return Number.isFinite(price) ? price.toFixed(2) : '-';
 }
 
+// One decimal: basis points, which are typically shown this way. Like prices, written out
+// rather than left to toLocaleString.
+export function formatBasisPoints(bps) {
+  return Number.isFinite(bps) ? bps.toFixed(1) : '-';
+}
+
 export function formatVolume(volume) {
   if (!Number.isFinite(volume)) return '-';
   const rounded = Math.round(volume);
@@ -351,13 +357,17 @@ export function topOfBook(touch) {
   const ask = priceOf(touch?.ask);
   const twoSided = bid !== null && ask !== null;
 
+  const spread = twoSided ? ask - bid : null;
+  const mid = twoSided ? (bid + ask) / 2 : null;
+  // Basis points: spread / (2 * mid) * 10000. Represents half-spread in basis points.
+  const basisPoints = twoSided && mid !== 0 ? (spread / (2 * mid)) * 10000 : null;
+
   return {
     bid,
     ask,
-    // Absolute, in the same units as the prices either side of it. Basis points are held
-    // back by PRD section 8.
-    spread: twoSided ? ask - bid : null,
-    mid: twoSided ? (bid + ask) / 2 : null,
+    spread,
+    mid,
+    basisPoints,
   };
 }
 
@@ -368,18 +378,21 @@ export const NO_ASKS = 'No sellers waiting';
 export const NO_MID = 'No mid price while one side is empty';
 // Reads after the word "Spread", which is where it appears.
 export const NO_SPREAD = 'unavailable while one side is empty';
+// Reads after the word "Basis points", which is where it appears.
+export const NO_BASIS_POINTS = 'unavailable while one side is empty';
 
-const READOUT_FIELDS = ['bid', 'ask', 'mid', 'spread'];
+const READOUT_FIELDS = ['bid', 'ask', 'mid', 'spread', 'basisPoints'];
 
-// The four numbers of the readout as the strings that go on the page.
+// The numbers of the readout as the strings that go on the page.
 export function formatReadout(model) {
-  const { bid = null, ask = null, mid = null, spread = null } = model ?? {};
+  const { bid = null, ask = null, mid = null, spread = null, basisPoints = null } = model ?? {};
 
   return {
     bid: bid === null ? NO_BIDS : formatPrice(bid),
     ask: ask === null ? NO_ASKS : formatPrice(ask),
     mid: mid === null ? NO_MID : formatPrice(mid),
     spread: spread === null ? NO_SPREAD : formatPrice(spread),
+    basisPoints: basisPoints === null ? NO_BASIS_POINTS : formatBasisPoints(basisPoints),
   };
 }
 
