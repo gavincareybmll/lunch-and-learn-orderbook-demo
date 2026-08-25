@@ -9,13 +9,14 @@ here — no licensed feed, no real venue, no real instrument.
 
 ## Status
 
-Scaffolding only. The specification has not been written yet, and no application code exists.
+Complete and live: **https://bmll-orderbook-factory-demo.netlify.app**
 
-Once `public/prd.html` is agreed, the application will be built from it — by the agent, one
-ticket at a time. The structure of the code will follow from the specification, not precede it.
+Every line of the application was written by an AI agent responding to a Jira ticket. Ten tickets,
+114 tests, five modules, built from [`public/prd.html`](public/prd.html) — the specification came
+first and the code follows from it, not the other way round.
 
-**How the factory itself works — and how to adapt it for your own project — is in
-[`FACTORY.md`](FACTORY.md).**
+The scaffolding — workflows, agent prompts, the Jira toolkit — was written by hand.
+**How it works, and how to adapt it for your own project, is in [`FACTORY.md`](FACTORY.md).**
 
 ## How it gets built
 
@@ -53,8 +54,10 @@ python3 -m http.server -d public 8000
 | `public/prd.html` | Product Requirements Document — the source specification |
 | `public/slides/` | Presentation material (hand-written, not factory-built) |
 | `test/` | Unit tests, run with `node --test` |
-| `.factory/` | Agent prompts |
-| `scripts/` | Jira toolkit and demo reset tooling |
+| `.factory/` | Agent prompts — read at runtime, so they can be iterated without touching a workflow |
+| `scripts/` | Jira toolkit, run telemetry, demo reset tooling |
+| `FACTORY.md` | How the factory works and why — start here if you want to copy it |
 
-Application source will live under `public/src/`. Its module layout is deliberately left
-undefined here — see the PRD.
+Application source lives under `public/src/`, with the module boundaries fixed by §6 of the PRD
+rather than chosen during implementation — so each ticket extended a known structure instead of
+inventing one.
