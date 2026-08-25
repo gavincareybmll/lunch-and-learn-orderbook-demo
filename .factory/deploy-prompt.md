@@ -84,6 +84,18 @@ A batch release ships every ticket that has been approved and is waiting. This i
 is normally shipped: many reviewed changes go out together, and the risk that matters is not in
 any one of them but in their *combination*.
 
+## R0 — Has this release already run?
+
+A release can be retried — the first attempt may have been cut short. Before doing anything,
+check this ticket's own comments for an earlier manifest, and check what is already on `main`.
+
+Anything already shipped by an earlier attempt is **already shipped**. Do not describe it as
+though you shipped it now: report it as "shipped by an earlier attempt of this release", and do
+not comment on that ticket again — it has already been told, and telling it twice makes the
+record untrustworthy.
+
+Your job on a retry is only the tickets still waiting.
+
 ## R1 — Find what is waiting
 
 ```
@@ -157,8 +169,10 @@ For each ticket **dropped**: leave it in "Ready for Deployment", and comment say
 back from this release, why, and what needs to happen. Do not move it to Needs Info — it was
 approved; it just did not make this train.
 
-Finally, on this release ticket: comment a short manifest — what shipped, what was held back and
-why, the live URL — then move it to Done. **Under 150 words.**
+Finally, on this release ticket: comment a short manifest — what shipped **in this run**, what was
+already shipped by an earlier attempt, what was held back and why, and the live URL — then move it
+to Done. **Under 150 words.** Be precise about the tense: a reader should be able to tell what this
+run actually did from what it merely found already done.
 
 ## Rules for a release
 
