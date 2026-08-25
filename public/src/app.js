@@ -33,10 +33,10 @@ export const FLOW = {
   // of the screen rather than a line in a spreadsheet (NFR-3).
   ladderLevels: 7,
 
-  // Blocks reserved per side in the queue view. The touch routinely holds more orders than
-  // this, which is the point: the queue is deeper than the screen and the view says so
-  // rather than pretending the tail is not there.
-  queueSlots: 6,
+  // Segments a queue bar is cut into. The touch routinely holds more orders than this, which
+  // is the point: the rest are gathered into the last segment and counted there, so the bar
+  // never pretends the tail is not behind it.
+  queueSegments: 7,
 };
 
 export function createSimulation(seed = FLOW.seed) {
@@ -97,7 +97,7 @@ function start() {
     advance(state, previous === null ? 0 : now - previous);
     previous = now;
     drawLadder(ladder, ladderDepth(state), { maxLevels: FLOW.ladderLevels });
-    if (queues) drawQueues(queues, touchQueues(state), { maxSlots: FLOW.queueSlots });
+    if (queues) drawQueues(queues, touchQueues(state), { maxSegments: FLOW.queueSegments });
     requestAnimationFrame(frame);
   };
 

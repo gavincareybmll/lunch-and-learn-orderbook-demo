@@ -66,10 +66,11 @@
     border-radius: 12px;
     overflow: hidden;
   }
-  /* The ladder is the wider of the two: it carries four columns to the queue view's three.
-     The queue view keeps enough width for a block to be a block rather than a line. */
-  .ladder-panel { flex: 1 1 56%; }
-  .queue-panel { flex: 1 1 44%; max-width: 34rem; }
+  /* The ladder is the wider of the two: it carries four columns of numbers. The queue view
+     needs width of a different kind - its bars are read along their length, and a bar too
+     narrow is a bar whose joins cannot be counted. */
+  .ladder-panel { flex: 1 1 54%; }
+  .queue-panel { flex: 1 1 46%; max-width: 38rem; }
   .panel canvas { display: block; width: 100%; height: 100%; }
 
   /* Side by side needs width. Below that the panels stack and the page is allowed to
@@ -113,7 +114,7 @@
     </section>
     <section class="panel queue-panel">
       <canvas id="queues" role="img"
-        aria-label="The queue at the best prices. Each block is one individual order waiting its turn, labelled with its position in line and its size. Sellers above the middle line, buyers below, and on each side the block nearest the line is the next one to trade."></canvas>
+        aria-label="The queue at the best prices. One bar for the best sell price and one for the best buy price, each bar being everything resting at that price, broken into a part for every individual order waiting there and sized in proportion to it. Sellers above the middle line, buyers below, and on each bar the part at the left-hand end is the next order to trade."></canvas>
     </section>
   </main>
 
@@ -121,8 +122,8 @@
     <li class="sells"><b>Above the line</b> sellers, cheapest offer nearest the middle</li>
     <li class="buys"><b>Below the line</b> buyers, highest bid nearest the middle</li>
     <li><b>Left panel</b> one row per price: the volume resting there, and how many orders that is</li>
-    <li><b>Right panel</b> those orders one by one, in the order they will trade</li>
-    <li><b>First in line</b> drawn solid, and it is the next order to trade at that price</li>
+    <li><b>Right panel</b> one of those rows opened up - one bar, split into the orders it is made of</li>
+    <li><b>First in line</b> the part at the left-hand end, drawn solid: the next order to trade there</li>
   </ul>
 
   <script type="module" src="./src/app.js"></script>
