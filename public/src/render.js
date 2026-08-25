@@ -1,6 +1,7 @@
 // Drawing the depth ladder (REQ-7), the queue view at the touch (REQ-8), the trade tape
-// (REQ-9) and the top-of-book readout (REQ-10): asks above, bids below, the touch at the
-// centre of both, what the price is, and what just happened.
+// (REQ-9), the top-of-book readout (REQ-10) and the playback control (REQ-12): asks above,
+// bids below, the touch at the centre of both, what the price is, what just happened, and
+// whether any of it is still moving.
 //
 // Holds no simulation state and imports nothing. Every function here takes a target and a
 // plain data structure - the { bids, asks } that engine.depth() returns, or the individual
@@ -380,6 +381,48 @@ export function formatReadout(model) {
     mid: mid === null ? NO_MID : formatPrice(mid),
     spread: spread === null ? NO_SPREAD : formatPrice(spread),
   };
+}
+
+// --- playback (REQ-12) ------------------------------------------------------------------
+
+// The control says what it will do next rather than what state it is in. A button labelled
+// with its own state is read as a description by half a room and as an action by the other
+// half, and the two readings are opposites.
+export const PAUSE_LABEL = 'Pause';
+export const RESUME_LABEL = 'Resume';
+
+// A stopped screen and a broken one look exactly alike, so being paused is said in words
+// beside the button as well as marked around it. Sentences with no number in them: nothing
+// this near the readout should be mistakable for a price (NFR-3).
+export const RUNNING_STATUS = 'Live - orders are arriving and trading';
+export const PAUSED_STATUS = 'Paused - the book is held still, nothing new is arriving';
+
+// What the control says, given whether the simulation is stopped. Pure, and the only place
+// those words are decided - the loop asks for them, it does not choose them.
+export function playbackControl(paused) {
+  const stopped = paused === true;
+  return {
+    paused: stopped,
+    label: stopped ? RESUME_LABEL : PAUSE_LABEL,
+    status: stopped ? PAUSED_STATUS : RUNNING_STATUS,
+  };
+}
+
+// Write the control into the page (REQ-12). `target` holds the button and the status line,
+// each marked with `data-playback`; the paused state is also put on the target itself, so the
+// stylesheet can mark a still screen as deliberately still rather than leaving it to the text
+// alone (NFR-3).
+export function drawPlayback(target, control) {
+  if (!target) return;
+  const model = control ?? playbackControl(false);
+
+  for (const [field, text] of Object.entries({ toggle: model.label, status: model.status })) {
+    const node = target.querySelector(`[data-playback="${field}"]`);
+    if (node && node.textContent !== text) node.textContent = text;
+  }
+
+  const paused = model.paused ? 'true' : 'false';
+  if (target.dataset.paused !== paused) target.dataset.paused = paused;
 }
 
 // --- the trade tape (REQ-9) -------------------------------------------------------------

@@ -16,6 +16,7 @@
     --muted: #8fa0c4;
     --ask: #ff9a90;
     --bid: #59d69f;
+    --held: #ffbf5a;
     --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
   }
@@ -36,7 +37,18 @@
     font: 17px/1.55 var(--sans);
   }
 
-  header { flex: none; }
+  /* Title on the left, the playback control on the right: the control has to be the obvious
+     thing to reach for without sitting anywhere near the mid price, which is still what the
+     eye should land on first (REQ-13). */
+  header {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem 1.5rem;
+  }
+  .titles { flex: 1 1 30rem; min-width: 0; }
   h1 {
     margin: 0;
     font-size: clamp(1.35rem, 2.4vw, 1.9rem);
@@ -49,6 +61,52 @@
     font-size: clamp(.92rem, 1.2vw, 1.02rem);
   }
   .standfirst strong { color: var(--ink); font-weight: 600; }
+
+  /* Playback (REQ-12). One control, labelled with the word for what it will do next, big
+     enough to hit and to read from the back of a room (NFR-3). The sentence beside it says
+     which of the two states the market is in, because a stopped screen and a broken one look
+     exactly alike from any distance. */
+  .playback {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: .55rem .8rem;
+    background: var(--panel);
+    border: 2px solid var(--rule);
+    border-radius: 12px;
+  }
+  .playback-button {
+    flex: none;
+    padding: .5rem 1.6rem;
+    background: var(--ink);
+    color: var(--paper);
+    border: 2px solid var(--ink);
+    border-radius: 9px;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: clamp(1.05rem, 1.7vw, 1.45rem);
+    letter-spacing: .01em;
+    cursor: pointer;
+  }
+  .playback-button:hover { background: #fff; border-color: #fff; }
+  .playback-button:focus-visible { outline: 3px solid var(--held); outline-offset: 3px; }
+  .playback-status {
+    margin: 0;
+    max-width: 24ch;
+    color: var(--muted);
+    font-size: clamp(.82rem, 1.05vw, .95rem);
+  }
+
+  /* Paused, said three ways over: in the sentence, in the colour, and in the frame that
+     thickens around the whole control - so none of it is carried by colour alone (NFR-3). */
+  .playback[data-paused="true"] { background: #2b2008; border-color: var(--held); }
+  .playback[data-paused="true"] .playback-status { color: var(--held); font-weight: 600; }
+  .playback[data-paused="true"] .playback-button {
+    background: var(--held);
+    border-color: var(--held);
+    color: var(--paper);
+  }
 
   /* The readout: what the price is, right now. The mid is the largest number on the page by
      a long way, so it is the first thing an eye lands on (REQ-13); the two prices it sits
@@ -227,10 +285,18 @@
 <body>
 
   <header>
-    <h1>Orderbook Lab</h1>
-    <p class="standfirst">A <strong>Level 3</strong> order book: every order is a separate order,
-      waiting its turn in the queue at its price. Buyers and sellers arrive, change their minds and
-      trade, continuously. Everything you see is invented in your browser - no real market data.</p>
+    <div class="titles">
+      <h1>Orderbook Lab</h1>
+      <p class="standfirst">A <strong>Level 3</strong> order book: every order is a separate order,
+        waiting its turn in the queue at its price. Buyers and sellers arrive, change their minds and
+        trade, continuously. Everything you see is invented in your browser - no real market data.</p>
+    </div>
+
+    <section class="playback" id="playback" data-paused="false"
+      aria-label="Playback. Stop the market to read what is on screen, and start it again from where it stopped.">
+      <button class="playback-button" type="button" data-playback="toggle">Pause</button>
+      <p class="playback-status" data-playback="status" role="status">Live - orders are arriving and trading</p>
+    </section>
   </header>
 
   <section class="readout" id="readout" aria-label="Top of book: the best price on each side, the middle of the two, and the gap between them.">
@@ -282,6 +348,8 @@
     <li><b>Trades</b> newest at the top - <b>Buy</b> when a buyer crossed to take an offer, <b>Sell</b> when a seller crossed to hit a bid</li>
     <li><b>Time</b> minutes and seconds since this book opened</li>
     <li><b>Bottom panel</b> the mid price over the last minute - what all that order flow adds up to</li>
+    <li><b>Pause</b> stops the market so you can read it - nothing arrives while it is stopped, and
+      it carries on from the same place</li>
   </ul>
 
   <script type="module" src="./src/app.js"></script>

@@ -6,6 +6,12 @@
 // screen and never the book underneath. The arithmetic that does it is exported and pure,
 // because a loop that quietly stops advancing looks exactly like a quiet market.
 //
+// Pausing is a property of that loop rather than of the book (REQ-12), and the whole of it is
+// one rule: wall time that passes while paused never reaches the clock. Banking it instead -
+// the obvious way to write this - leaves the loop owing the length of the pause the moment it
+// resumes, and it pays it back as a single burst of events that on a projector is
+// indistinguishable from a crash.
+//
 // The browser loop starts only when there is a document to draw into, so that importing this
 // module under the test runner needs no DOM (NFR-2).
 
@@ -14,9 +20,11 @@ import { createSim, step } from './sim.js';
 import {
   drawChart,
   drawLadder,
+  drawPlayback,
   drawQueues,
   drawReadout,
   drawTape,
+  playbackControl,
   recordMid,
   recordTrades,
   topOfBook,
@@ -79,6 +87,9 @@ export function createSimulation(seed = FLOW.seed) {
     // empty plot (REQ-11).
     series: [],
     nextSampleMs: 0,
+    // The page opens on a running market: a still one would have to be started before there
+    // was anything to look at.
+    paused: false,
   };
 
   for (let i = 0; i < FLOW.warmupEvents; i += 1) apply(state);
@@ -115,10 +126,32 @@ function sampleMid(state, flowMs) {
   state.series = recordMid(state.series, mid, { limit: FLOW.chartPoints, timeMs: flowMs });
 }
 
+// --- playback (REQ-12) ------------------------------------------------------------------
+
+export function isPaused(state) {
+  return state?.paused === true;
+}
+
+// Stop or start the flow, and report the state it is now in - so a caller that toggles has
+// the answer without asking a second question.
+export function setPaused(state, paused) {
+  state.paused = paused === true;
+  return state.paused;
+}
+
+export function togglePaused(state) {
+  return setPaused(state, !isPaused(state));
+}
+
 // Apply the events that `elapsedMs` of wall time is owed, and report how many were applied.
 // The schedule is kept against the total elapsed time rather than accumulated per frame, so
 // a run of short frames and one long one advance the book by exactly the same amount.
 export function advance(state, elapsedMs) {
+  // Paused: the elapsed time is dropped here, before it can reach the clock, so the flow
+  // resumes owing exactly what it owed when it stopped rather than the length of the pause
+  // as well (REQ-12). This one line is the whole of the catch-up bug the ticket warns about.
+  if (isPaused(state)) return 0;
+
   if (Number.isFinite(elapsedMs) && elapsedMs > 0) state.clockMs += elapsedMs;
 
   const due = Math.floor((state.clockMs * FLOW.eventsPerSecond) / 1000) - state.scheduled;
@@ -177,15 +210,39 @@ function start() {
   const readout = document.getElementById('readout');
   const tape = document.getElementById('tape');
   const chart = document.getElementById('chart');
+  const playback = document.getElementById('playback');
   if (!ladder) return;
 
   const state = createSimulation();
   let previous = null;
   let printed = null;
+  // What the panels were last drawn at, so a pause can tell a still screen from a resized one.
+  let measured = null;
+  let held = false;
+
+  const showControl = () => drawPlayback(playback, playbackControl(isPaused(state)));
+  playback?.querySelector('[data-playback="toggle"]')?.addEventListener('click', () => {
+    togglePaused(state);
+    showControl();
+  });
+  showControl();
 
   const frame = (now) => {
     advance(state, previous === null ? 0 : now - previous);
     previous = now;
+
+    // While paused nothing can have changed, so nothing is redrawn: the pause costs no work
+    // beyond noticing that the window has been resized under it, which is the one thing that
+    // alters what a still book should look like (NFR-4).
+    const size = `${ladder.clientWidth}x${ladder.clientHeight}`;
+    const still = held && isPaused(state) && size === measured;
+    measured = size;
+    held = isPaused(state);
+    if (still) {
+      requestAnimationFrame(frame);
+      return;
+    }
+
     drawLadder(ladder, ladderDepth(state), { maxLevels: FLOW.ladderLevels });
     if (queues) drawQueues(queues, touchQueues(state), { maxSegments: FLOW.queueSegments });
     if (readout) drawReadout(readout, topOfBook(touchLevels(state)));
