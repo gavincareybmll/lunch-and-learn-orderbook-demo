@@ -198,7 +198,16 @@ loop trustworthy:
 > **Trap (Netlify specifically):** the free plan is credit-based, not build-minute based.
 > **Production deploys cost 15 credits; previews are free.** We reasoned carefully about build
 > minutes — which we genuinely never consume — and missed this entirely until a billing alert
-> arrived. Also check **Team settings → SSO**: sites can be gated so that only logged-in team
+> arrived.
+>
+> **A rollback is a production deploy.** Restoring an earlier deploy republishes the site and
+> bills the same 15 credits as deploying it the first time. Our reset script called restore
+> unconditionally, described it in a comment as free, and burned ~90 credits over six resets
+> restoring a deploy that was *already live*. It now checks `published_deploy.id` first and
+> skips when production has not moved. If your reset touches a metered surface, make it prove
+> the surface has changed before it acts.
+>
+> Also check **Team settings → SSO**: sites can be gated so that only logged-in team
 > members can view them, which you will not notice because *you* are logged in.
 
 ---
@@ -255,8 +264,9 @@ tokens present (this repo expects them in `~/.config/factory/`, or in the enviro
 ./scripts/reset-demo.sh --yes      # do it, with confirmations
 ```
 
-**The rehearsal loop:** seed → run the session → `reset-demo.sh --yes` → repeat. Resetting is free
-and takes seconds, so rehearse as often as you like.
+**The rehearsal loop:** seed → run the session → `reset-demo.sh --yes` → repeat. It takes seconds,
+so rehearse as often as you like. It is also free **provided production has not moved** — if you
+never merged to `main`, there is nothing to restore and reset touches nothing that bills.
 
 ### What reset does, and what it deliberately does not
 
@@ -265,7 +275,7 @@ and takes seconds, so rehearse as often as you like.
 | `main` | Hard-reset to the `demo-baseline` tag and force-pushed |
 | Branches and PRs | `feat/*` branches deleted, open PRs closed |
 | Jira | **Everything not labelled `baseline` is deleted**, then the demo tickets re-seeded |
-| Deployment | The baseline deploy is **restored**, not rebuilt — free and instant |
+| Deployment | The baseline deploy is **restored**, not rebuilt — and only when production has actually moved off it |
 
 The Jira rule is an **allowlist on purpose**. Deleting tickets that carry a "demo" label would
 require everyone to label correctly when they create one, and an audience member will not. The set

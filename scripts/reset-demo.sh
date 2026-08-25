@@ -6,10 +6,14 @@
 #
 #   git/GitHub  main -> the baseline commit; feature branches and open PRs removed
 #   Jira        everything NOT labelled 'baseline' is deleted, then the demo tickets re-seeded
-#   Netlify     the baseline deploy is RESTORED (free and instant), not rebuilt
+#   Netlify     the baseline deploy is RESTORED, not rebuilt -- and only if production has
+#               actually moved off it
 #
-# Restoring rather than redeploying matters twice over: a production deploy costs 15 credits on
-# the free plan, and a rebuild is ~60s of dead air if you ever need this mid-session.
+# Restoring beats redeploying because a rebuild is ~60s of dead air if you ever need this
+# mid-session. It is NOT free: a restore republishes the site and bills as a production deploy
+# (15 credits on the free plan), which an earlier version of this script wrongly claimed was
+# free. Six resets during a model comparison spent ~90 credits restoring a deploy that was
+# already live. Hence the check below: if production is already at the baseline, do nothing.
 #
 # Dry run by default. Pass --yes to actually do it.
 set -euo pipefail
@@ -19,7 +23,14 @@ BASELINE_FILE=".factory/demo-baseline.json"
 SITE_ID="${NETLIFY_SITE_ID:-3ad0d238-fea0-4f6e-9078-bc5eb184aeeb}"
 BASELINE_LABEL="baseline"
 APPLY=false
-[ "${1:-}" = "--yes" ] && APPLY=true
+SKIP_NETLIFY=false
+for ARG in "$@"; do
+  case "$ARG" in
+    --yes)         APPLY=true ;;
+    --no-netlify)  SKIP_NETLIFY=true ;;
+    *) echo "unknown argument: $ARG (expected --yes and/or --no-netlify)" >&2; exit 1 ;;
+  esac
+done
 
 say(){ printf '%s\n' "$*"; }
 act(){ if $APPLY; then eval "$1"; else say "    would run: $1"; fi; }
@@ -123,8 +134,22 @@ act "./scripts/seed-demo-tickets.sh"
 # --------------------------------------------------------------------- Netlify
 say
 say "Netlify"
-say "  restoring baseline deploy $BASE_DEPLOY (free — a fresh production deploy costs 15 credits)"
-act "curl -sS -X POST -H \"Authorization: Bearer \$(tr -d ' \t\n\r' < ~/.config/factory/netlify_token.txt)\" -o /dev/null \"https://api.netlify.com/api/v1/sites/$SITE_ID/deploys/$BASE_DEPLOY/restore\""
+NETLIFY_TOKEN=$(tr -d ' \t\n\r' < ~/.config/factory/netlify_token.txt 2>/dev/null || true)
+LIVE=$(curl -sS -H "Authorization: Bearer $NETLIFY_TOKEN" --max-time 20 \
+  "https://api.netlify.com/api/v1/sites/$SITE_ID" 2>/dev/null \
+  | python3 -c 'import json,sys;print((json.load(sys.stdin).get("published_deploy") or {}).get("id",""))' 2>/dev/null || true)
+
+if $SKIP_NETLIFY; then
+  say "  --no-netlify given; leaving production alone (currently ${LIVE:-unknown})"
+elif [ -z "$LIVE" ]; then
+  say "  ⚠️  could not read the live deploy; NOT restoring blind (a restore costs 15 credits)"
+  say "     check the site by hand, then re-run with the restore if production has moved"
+elif [ "$LIVE" = "$BASE_DEPLOY" ]; then
+  say "  production is already at the baseline deploy — nothing to restore"
+else
+  say "  production is at $LIVE, baseline is $BASE_DEPLOY — restoring (costs 15 credits)"
+  act "curl -sS -X POST -H \"Authorization: Bearer \$(tr -d ' \t\n\r' < ~/.config/factory/netlify_token.txt)\" -o /dev/null \"https://api.netlify.com/api/v1/sites/$SITE_ID/deploys/$BASE_DEPLOY/restore\""
+fi
 
 say
 if $APPLY; then
