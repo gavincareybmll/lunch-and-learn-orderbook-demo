@@ -76,13 +76,13 @@ jobs:
             echo 'FACTORY_PROMPT_EOF'
           } >> "$GITHUB_OUTPUT"
 
-      # Note: github_token is deliberately NOT passed. The action authenticates as the
-      # Claude GitHub App, whose pushes DO trigger workflows — commits made with the
-      # default GITHUB_TOKEN do not, which would leave the PR showing zero CI checks.
       - name: Stamp start time
         id: started
         run: echo "epoch=$(date +%s)" >> "$GITHUB_OUTPUT"
 
+      # Note: github_token is deliberately NOT passed. The action authenticates as the
+      # Claude GitHub App, whose pushes DO trigger workflows — commits made with the
+      # default GITHUB_TOKEN do not, which would leave the PR showing zero CI checks.
       - name: Run the agent
         id: agent
         uses: anthropics/claude-code-action@v1
