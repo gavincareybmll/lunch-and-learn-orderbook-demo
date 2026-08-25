@@ -176,7 +176,7 @@ function match(book, taker, limitPrice) {
 
     const queue = levels.get(price);
     while (remaining > 0 && queue.length > 0) {
-      const maker = queue[0]; // position 1 is next to fill, always
+      const maker = queue[queue.length-1]; // position 1 is next to fill, always    // here 0->queue.length-1
       const size = Math.min(remaining, maker.size);
       maker.size -= size;
       remaining -= size;
@@ -190,7 +190,7 @@ function match(book, taker, limitPrice) {
       });
       // A fully-filled order leaves the book entirely: nothing zero-sized rests (INV-5).
       if (maker.size === 0) {
-        queue.shift();
+        queue.pop(); // Here shift->pop
         book.orders.delete(maker.id);
       }
     }
