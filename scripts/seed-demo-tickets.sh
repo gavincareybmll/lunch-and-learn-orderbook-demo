@@ -59,7 +59,7 @@ COLD=$(join \
   "$(h 'Outcome')" \
   "$(p 'The spread is shown in basis points beside the existing absolute figure, so its size can be judged without doing arithmetic.')" \
   "$(h 'Requirements')" \
-  "$(p 'Extends REQ-10 (top-of-book readout). Held back deliberately by PRD section 8, so nothing else depends on it.')" \
+  "$(p 'Extends REQ-10 (top-of-book readout). PRD section 8 lists this as headroom kept out of version 1.0 so that a later ticket could build it - this is that ticket, and it promotes the item into scope. Nothing else depends on it.')" \
   "$(h 'Acceptance criteria')" \
   "$(ul \
      'Given a best bid of 99 and a best ask of 101, when the spread in basis points is computed, then it is 200.0 - the quoted spread of 2, divided by the mid of 100, times 10000.' \
