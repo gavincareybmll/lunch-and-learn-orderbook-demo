@@ -200,8 +200,10 @@ loop trustworthy:
 > minutes — which we genuinely never consume — and missed this entirely until a billing alert
 > arrived.
 >
-> **A rollback is a production deploy.** Restoring an earlier deploy republishes the site and
-> bills the same 15 credits as deploying it the first time. Our reset script called restore
+> **A rollback appears to bill as a production deploy.** Netlify's API does not expose credit
+> usage, so we could not read this directly — the evidence is that credits fell by roughly
+> 6 × 15 across six resets that created no new deploy records and changed nothing. Treat the
+> mechanism as inferred; the fix is right under any reading of it. Our reset script called restore
 > unconditionally, described it in a comment as free, and burned ~90 credits over six resets
 > restoring a deploy that was *already live*. It now checks `published_deploy.id` first and
 > skips when production has not moved. If your reset touches a metered surface, make it prove

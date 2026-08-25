@@ -4,7 +4,12 @@ The factory's model is one line of configuration. This is what changed when we v
 
 Three models — **Opus 5**, **Sonnet 5**, **Haiku 4.5** — were each given the same three tickets
 from the same starting commit, with a full `reset-demo.sh` between models so that no run could see
-another's comments, branches or pull requests. Nine runs, **$6.91** in total.
+another's comments, branches or pull requests. Ten runs, **$8.04** in total.
+
+**One run per cell.** This is not a benchmark and the cost figures are single observations, not
+means. It is worth reading because of *what* the failures were, not how often they occurred — a
+model that rationalises a contradictory requirement once has demonstrated that it can, and that is
+the property being tested.
 
 ## The three probes
 
@@ -26,7 +31,7 @@ it, reviewing it, or seeding it. The first agent to read it did.
 | | Probe A — vague | Probe B — subtly wrong | Probe C — correct |
 |---|---|---|---|
 | **Opus 5** | ✅ Declined | ✅ Declined, named the ambiguity | ✅ Built |
-| **Sonnet 5** | ✅ Declined | ✅ Declined, named the ambiguity | ❌ **Declined — false negative** |
+| **Sonnet 5** | ✅ Declined | ✅ Declined, named the ambiguity | ❌ Declined → ✅ built after a ticket reword |
 | **Haiku 4.5** | ⚠️ Declined, but no @mention | ❌ **Built the wrong thing** | ✅ Built, weaker |
 
 ### Cost and effort
@@ -42,6 +47,7 @@ it, reviewing it, or seeding it. The first agent to read it did.
 | Haiku 4.5 | A vague | 5 | 38s | 169,941 | 1,412 | $0.08 |
 | Haiku 4.5 | B wrong | 29 | 2m 7s | 1,202,278 | 10,029 | $0.26 |
 | Haiku 4.5 | C build | 31 | 2m 13s | 1,858,249 | 8,879 | $0.34 |
+| Sonnet 5 | C build, reworded | 36 | 4m 25s | 2,997,146 | 18,819 | $1.13 |
 
 Input is dominated by cache reads in every run; the vast majority of it is the PRD, `CLAUDE.md`
 and the existing source being re-read each turn. **Opus cost ten times what Haiku did to build the
@@ -74,20 +80,32 @@ a green check would have approved it.
 Opus and Sonnet both stopped and asked, and both identified the exact ambiguity — that 200.0 is
 the quoted spread and 100.0 the half-spread, two standard conventions differing by a factor of two.
 
-### Sonnet blocked the ticket that has to work
+### Sonnet blocked the cold open — over a sentence we wrote badly
 
 On the *corrected* ticket, Sonnet declined:
 
 > PRD section 8 lists "Spread expressed in basis points" as deliberately out of scope for v1.0 …
 > This is buildable once the PRD's §8 exclusion is lifted.
 
-It is a coherent objection — the ticket does say "held back deliberately by PRD section 8" without
-saying that decision was reversed. But the PRD answers it a paragraph earlier: §8's items are
-omitted *"on purpose: they are the surface on which further tickets are demonstrated."* Sonnet read
-the exclusion and not the reason for it, and refused the cold open.
+The blame is shared, and mostly ours. The PRD answers the objection a paragraph earlier — §8's
+items are omitted *"on purpose: they are the surface on which further tickets are demonstrated"* —
+so Sonnet read the exclusion without the reason for it. But the ticket invited that reading. It
+said the item was *"held back deliberately by PRD section 8"* and never said the decision had since
+been taken. Opus and Haiku read past it; Sonnet took it at its word, which is not an unreasonable
+thing for an engineer to do with a sentence that says a thing is held back.
 
-A refusal is cheap to recover from — far cheaper than a wrong build — but it is the one outcome
-that stalls a live demonstration.
+So we rewrote the sentence to authorise rather than merely explain:
+
+> PRD section 8 lists this as headroom kept out of version 1.0 so that a later ticket could build
+> it — **this is that ticket, and it promotes the item into scope.**
+
+Sonnet then built it, cleanly, first time. **The model did not change; one sentence in the ticket
+did.** That is the same lesson probe B teaches from the other direction, and it is the more
+encouraging one: this failure was fixed by authoring, not by buying a larger model.
+
+The general point stands regardless. A refusal is far cheaper to recover from than a wrong build —
+but it is the one outcome that stalls a live demonstration, and a ticket that reads as
+self-prohibiting will find the model that agrees with it.
 
 ### Haiku silently dropped the @mention
 
@@ -114,23 +132,30 @@ length.
 
 ## Code quality on the same ticket
 
-Opus and Haiku both built probe C correctly. The diffs are not comparable in care.
+All three built probe C correctly. The diffs are not comparable in care.
 
-| | Opus 5 | Haiku 4.5 |
-|---|---|---|
-| Files changed | 3 | 3 |
-| Lines added | 245 | 43 |
-| Tests added | 7 | 2 |
-| Red-then-green CI evidence | ✅ | ❌ |
-| Zero-mid guard | `spread !== null && mid > 0` | `mid !== null` — divides by zero |
-| Empty book | `bps` unit hidden via `[data-available="false"]` | renders "unavailable while one side is empty **bps**" |
-| Decimal places | `200.0`, matching the criterion | `200.00` |
-| Accessibility | `aria-label` updated to describe the new figure | unchanged |
-| Explains itself | legend entry added: "one basis point is a hundredth of one percent" | none |
+| | Opus 5 | Sonnet 5 | Haiku 4.5 |
+|---|---|---|---|
+| Files changed | 3 | 3 | 3 |
+| Lines added | 245 | 66 | 43 |
+| Tests added | 7 | 3 | 2 |
+| Red-then-green CI evidence | ✅ | ✅ | ❌ |
+| Zero-mid guard | `spread !== null && mid > 0` | `mid ? … : null` | `mid !== null` — divides by zero |
+| Empty book | `bps` unit hidden via a CSS sibling rule | unit lives *inside* the formatted string, so the words stand alone | renders "unavailable while one side is empty **bps**" |
+| Decimal places | `200.0`, matching the criterion | `200.0` | `200.00` |
+| Accessibility | `aria-label` updated to describe the new figure | unchanged | unchanged |
+| Explains itself | legend entry: "one basis point is a hundredth of one percent" | none | none |
 
 The visible bug is Haiku's: the `bps` label is static in the markup, so when one side of the book
 empties the readout reads *"Spread unavailable while one side is empty, unavailable while one side
-is empty bps."* Opus anticipated it and hid the unit.
+is empty bps."* Both stronger models anticipated it. Sonnet's answer is arguably the better of the
+two — putting the unit inside the formatted value means the unavailable case cannot dangle a label,
+where Opus's CSS rule is a second mechanism that has to be kept in step with the first.
+
+Opus's extra bulk is not padding: it is four more tests, the `aria-label`, and a legend entry
+explaining what a basis point *is* to the half of the audience who would not otherwise know. That
+last one was in no acceptance criterion; it follows from REQ-13, which asks the interface to be
+legible without explanation.
 
 **The tests-first evidence is the more serious gap.** Haiku committed the tests as their own commit
 but pushed all three commits together, so only the final commit ever reached CI and there is no red
@@ -140,9 +165,11 @@ run, so this is inconsistency rather than refusal.
 
 ## What we changed as a result
 
-- **The cold-open ticket was wrong** and is now fixed. It would have been declined live on stage.
-  It was found by running it through the factory, not by reading it — which is the argument for
-  rehearsing tickets through the agent rather than reviewing them by eye.
+- **The cold-open ticket was wrong twice**, and both faults are now fixed: the arithmetic, and the
+  sentence about §8 that read as a prohibition. Both would have stopped the demonstration in its
+  first three minutes. Neither was found by reading the ticket — they were found by running it
+  through the factory, which is the argument for rehearsing tickets through the agent rather than
+  reviewing them by eye.
 - **`FACTORY_MODEL` is now a repository variable**, so the model can be changed without editing a
   workflow. Two reasons that matters: `repository_dispatch` only reads workflow files on the
   default branch, so an inline edit needs a merge; and `reset-demo.sh` rolls `main` back, which
@@ -160,9 +187,12 @@ arithmetic. Paying $3 instead of $0.30 to have the ticket questioned rather than
 not a close call. The whole premise of gating delivery on the agent's judgement collapses if the
 judgement is the part you economised on.
 
-**Sonnet is a reasonable fallback**, at roughly a sixth of the cost. It caught probe B with the same
-reasoning Opus used. Its failure mode is over-refusal, which is recoverable — but be aware that it
-refused the one ticket that had to succeed.
+**Sonnet is a reasonable fallback**, at roughly a third of the cost on the build and a sixth on the
+cheap decisions. It caught probe B with the same reasoning Opus used, and its implementation was
+the tidiest of the three on the one detail all three had to get right. Its failure mode is
+over-refusal — recoverable, and in our case caused by our own wording rather than by the model. But
+it is worth knowing that the less headroom a model has, the more precisely the ticket has to be
+written, and that cost lands on whoever writes the tickets.
 
 **Do not run Haiku as the build agent.** It declines vague work adequately and its accepted code is
 serviceable, but it rationalised a contradictory requirement into a shipped implementation, dropped

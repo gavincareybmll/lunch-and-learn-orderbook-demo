@@ -139,8 +139,8 @@ blocked by it. The gate is real, it just lives in Jira rather than GitHub.
 - **Assumed the wrong resource was scarce.** We reasoned carefully about build minutes, which we
   never consume, and missed that the plan is credit-based: production deploys cost credits,
   previews are free. A billing alert caught it, not us. We then made the same mistake a second
-  time in the other direction — the reset script's rollback was commented as free, when a
-  restore republishes the site and bills exactly like a deploy. Both errors were confident
+  time in the other direction — the reset script's rollback was commented as free, when the
+  evidence says a restore republishes the site and bills like a deploy. Both errors were confident
   reasoning about a billing model we had never actually read.
 - **A retried release overstated what it had done**, describing work an earlier attempt had
   completed. The outcome was right but the record was not, and the record is what people check
