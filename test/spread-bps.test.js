@@ -24,6 +24,9 @@ import { topOfBook, formatReadout } from '../public/src/render.js';
 
 const INDEX = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 const STYLE = INDEX.slice(INDEX.indexOf('<style>'), INDEX.indexOf('</style>'));
+// Where the slots are, as against where they are styled: a stylesheet may well name a slot,
+// and it is the markup that says what sits beside what.
+const MARKUP = INDEX.slice(INDEX.indexOf('</style>'));
 
 const level = (price, volume = 100, orderCount = 1) => ({ price, volume, orderCount });
 
@@ -97,8 +100,8 @@ test('Given a book with one side empty, when the spread in basis points is compu
 });
 
 test('Given the readout, when it is viewed, then the basis points figure appears beside the absolute spread and is labelled bps', () => {
-  const spreadAt = INDEX.indexOf('data-readout="spread"');
-  const bpsAt = INDEX.indexOf('data-readout="spreadBps"');
+  const spreadAt = MARKUP.indexOf('data-readout="spread"');
+  const bpsAt = MARKUP.indexOf('data-readout="spreadBps"');
 
   assert.ok(spreadAt > -1, 'the absolute spread still has its slot');
   assert.ok(bpsAt > -1, 'the basis points figure has a slot of its own on the readout');
@@ -106,7 +109,7 @@ test('Given the readout, when it is viewed, then the basis points figure appears
 
   // Beside it, not somewhere else on the page: the two sit in the same line of the readout,
   // with nothing between them.
-  const between = INDEX.slice(spreadAt, bpsAt);
+  const between = MARKUP.slice(spreadAt, bpsAt);
   assert.ok(
     !/<\/p>|<p[\s>]|<section/.test(between),
     'the basis points figure shares the spread\'s line rather than starting a new block',
@@ -114,14 +117,14 @@ test('Given the readout, when it is viewed, then the basis points figure appears
 
   // Labelled, so the figure is never read as a second price.
   assert.match(
-    INDEX.slice(spreadAt, bpsAt + 160),
+    MARKUP.slice(spreadAt, bpsAt + 160),
     /[\s>]bps\b/,
     'the basis points figure is labelled bps',
   );
 
   // Every slot the readout markup offers is a field the readout model fills, so the new one
   // is written by the same loop as the other four rather than left showing its placeholder.
-  const slots = [...INDEX.matchAll(/data-readout="([^"]+)"/g)].map((match) => match[1]);
+  const slots = [...MARKUP.matchAll(/data-readout="([^"]+)"/g)].map((match) => match[1]);
   const fields = Object.keys(formatReadout(topOfBook({ bid: level(99), ask: level(101) })));
   assert.ok(slots.includes('spreadBps'));
   for (const slot of slots) {
@@ -144,7 +147,7 @@ test('Given the readout, when it is viewed, then the mid price is still the most
 
   // The figure is added into the small-print line the absolute spread already lives on, which
   // the stylesheet sets far below the mid - so whatever it is styled with, it cannot shout.
-  const bpsTag = /<[^>]*data-readout="spreadBps"[^>]*>/.exec(INDEX);
+  const bpsTag = /<[^>]*data-readout="spreadBps"[^>]*>/.exec(MARKUP);
   assert.ok(bpsTag, 'the basis points figure has an element of its own');
   const classes = (/class="([^"]*)"/.exec(bpsTag[0])?.[1] ?? '').split(/\s+/).filter(Boolean);
   assert.ok(classes.length > 0, 'that element carries a class the stylesheet can size');

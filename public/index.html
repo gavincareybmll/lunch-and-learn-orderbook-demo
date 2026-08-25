@@ -148,6 +148,14 @@
   .quote-note { margin: .1rem 0 0; color: var(--muted); font-size: clamp(.78rem, 1.05vw, .95rem); }
   .quote-note .quote-figure { font-family: var(--mono); font-weight: 600; color: var(--ink); }
 
+  /* The spread said a second way, as a proportion of the price it sits at. Set a shade below
+     the absolute figure it follows: it is the same fact rescaled, so it reads as a footnote
+     to the spread rather than as a third price competing with the mid (REQ-13). */
+  .quote-note .quote-bps { font-size: clamp(.72rem, .95vw, .86rem); }
+  .quote-unit { letter-spacing: .04em; }
+  /* With one side empty the figure becomes a phrase, and a phrase takes no unit. */
+  [data-readout="spreadBps"][data-available="false"] + .quote-unit { display: none; }
+
   /* An absent price is a sentence where a number would be, and cannot be set at the size of
      one. Every slot says so the same way, so nothing on the readout is ever a dash or a
      zero standing in for a price that does not exist. */
@@ -299,7 +307,7 @@
     </section>
   </header>
 
-  <section class="readout" id="readout" aria-label="Top of book: the best price on each side, the middle of the two, and the gap between them.">
+  <section class="readout" id="readout" aria-label="Top of book: the best price on each side, the middle of the two, and the gap between them, given both in price and as a proportion of that price in basis points.">
     <div class="quote bid">
       <p class="quote-label">Best bid - most anyone will pay</p>
       <p class="quote-price" data-readout="bid">-</p>
@@ -307,7 +315,8 @@
     <div class="quote mid">
       <p class="quote-label">Mid price</p>
       <p class="quote-price" data-readout="mid">-</p>
-      <p class="quote-note">Spread <span class="quote-figure" data-readout="spread">-</span></p>
+      <p class="quote-note">Spread <span class="quote-figure" data-readout="spread">-</span>,
+        <span class="quote-figure quote-bps" data-readout="spreadBps">-</span><span class="quote-unit"> bps</span></p>
     </div>
     <div class="quote ask">
       <p class="quote-label">Best ask - least anyone will sell for</p>
@@ -345,6 +354,8 @@
     <li><b>Right panel</b> one of those rows opened up - one bar, split into the orders it is made of</li>
     <li><b>First in line</b> the part at the left-hand end, drawn solid: the next order to trade there</li>
     <li><b>Mid price</b> halfway between the two best prices; the spread is the gap between them</li>
+    <li><b>bps</b> that same gap as a share of the price - one basis point is a hundredth of one
+      percent, so 200 bps is two percent of the mid</li>
     <li><b>Trades</b> newest at the top - <b>Buy</b> when a buyer crossed to take an offer, <b>Sell</b> when a seller crossed to hit a bid</li>
     <li><b>Time</b> minutes and seconds since this book opened</li>
     <li><b>Bottom panel</b> the mid price over the last minute - what all that order flow adds up to</li>
