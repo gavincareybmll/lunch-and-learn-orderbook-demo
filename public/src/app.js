@@ -11,7 +11,15 @@
 
 import { createBook, depth, bestBid, bestAsk, queueAt } from './engine.js';
 import { createSim, step } from './sim.js';
-import { drawLadder, drawQueues } from './render.js';
+import {
+  drawLadder,
+  drawQueues,
+  drawReadout,
+  drawTape,
+  recordTrades,
+  topOfBook,
+  TAPE_LIMIT,
+} from './render.js';
 
 export const FLOW = {
   seed: 20260824,
@@ -37,13 +45,41 @@ export const FLOW = {
   // is the point: the rest are gathered into the last segment and counted there, so the bar
   // never pretends the tail is not behind it.
   queueSegments: 7,
+
+  // Trades the tape keeps before the oldest falls off (NFR-4). The bound is render.js's own
+  // default: it is the module that does the trimming, and one number is harder to disagree
+  // with than two.
+  tapeEntries: TAPE_LIMIT,
 };
 
 export function createSimulation(seed = FLOW.seed) {
-  const state = { book: createBook(), sim: createSim(seed), clockMs: 0, scheduled: 0 };
+  const state = {
+    book: createBook(),
+    sim: createSim(seed),
+    clockMs: 0,
+    scheduled: 0,
+    // Every event ever applied, warmup included. The tape's clock is counted from this
+    // rather than from the wall clock, so the same seed prints the same tape (REQ-5).
+    events: 0,
+    tape: [],
+  };
 
-  for (let i = 0; i < FLOW.warmupEvents; i += 1) step(state.sim, state.book);
+  for (let i = 0; i < FLOW.warmupEvents; i += 1) apply(state);
   return state;
+}
+
+// Apply one event and print whatever it traded to the tape. A trade's time is the point in
+// the flow at which it happened, at the rate the flow is paced: the simulation's own clock,
+// which is the only clock there is here (NFR-1).
+function apply(state) {
+  const trades = step(state.sim, state.book);
+  state.events += 1;
+  if (trades.length === 0) return;
+
+  state.tape = recordTrades(state.tape, trades, {
+    limit: FLOW.tapeEntries,
+    timeMs: (state.events * 1000) / FLOW.eventsPerSecond,
+  });
 }
 
 // Apply the events that `elapsedMs` of wall time is owed, and report how many were applied.
@@ -56,7 +92,7 @@ export function advance(state, elapsedMs) {
   if (due <= 0) return 0;
 
   const applied = Math.min(due, FLOW.maxBurstEvents);
-  for (let i = 0; i < applied; i += 1) step(state.sim, state.book);
+  for (let i = 0; i < applied; i += 1) apply(state);
 
   // The whole backlog counts as scheduled, including any part of it dropped: the clock is
   // not rewound to replay it on the next frame.
@@ -83,21 +119,44 @@ export function touchQueues(state) {
   };
 }
 
+// The two touch levels the readout is computed from (REQ-10). A side with nothing resting on
+// it is null, which is what makes mid and spread unavailable rather than zero.
+export function touchLevels(state) {
+  return { bid: bestBid(state.book), ask: bestAsk(state.book) };
+}
+
+// The trades printed so far, newest first and bounded (REQ-9).
+export function tradeTape(state) {
+  return state.tape ?? [];
+}
+
 // --- browser ----------------------------------------------------------------------------
 
 function start() {
   const ladder = document.getElementById('ladder');
   const queues = document.getElementById('queues');
+  const readout = document.getElementById('readout');
+  const tape = document.getElementById('tape');
   if (!ladder) return;
 
   const state = createSimulation();
   let previous = null;
+  let printed = null;
 
   const frame = (now) => {
     advance(state, previous === null ? 0 : now - previous);
     previous = now;
     drawLadder(ladder, ladderDepth(state), { maxLevels: FLOW.ladderLevels });
     if (queues) drawQueues(queues, touchQueues(state), { maxSegments: FLOW.queueSegments });
+    if (readout) drawReadout(readout, topOfBook(touchLevels(state)));
+
+    // The tape only changes when something traded, and recordTrades returns the same list
+    // when nothing did - so identity is enough to skip rewriting the rows on the frames in
+    // between (NFR-4).
+    if (tape && state.tape !== printed) {
+      drawTape(tape, state.tape);
+      printed = state.tape;
+    }
     requestAnimationFrame(frame);
   };
 
