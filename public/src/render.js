@@ -16,10 +16,10 @@
 // Placement is a Row plus { y, barWidth } - where and how wide it is drawn.
 //
 // Order is { id, side, price, size, ts }, as the queue view receives it.
-// QueueRow is { position, id, size, fraction } - its share of the largest order in its queue.
+// Segment is { position, id, size, orders, x, width, fraction, combined, leading } - one
+// order's share of the single bar that is its price level.
 
 const LADDER_ROWS_PER_SIDE = 8;
-const QUEUE_SLOTS_PER_SIDE = 6;
 
 // Dark, high contrast, and legible from the back of a room (NFR-3). Sides are separated by
 // position and by their labels as well as by colour, so nothing here is the only carrier of
@@ -27,6 +27,8 @@ const QUEUE_SLOTS_PER_SIDE = 6;
 const THEME = {
   text: '#e8eefc',
   muted: '#8fa0c4',
+  // For text sitting on a solid fill, where the light ink above would disappear.
+  solidInk: '#08101f',
   rule: 'rgba(140,165,220,0.14)',
   centre: 'rgba(200,218,255,0.8)',
   ask: { text: '#ff9a90', bar: 'rgba(255,107,98,0.30)', edge: '#ff6b62' },
@@ -120,67 +122,188 @@ export function formatOrderCount(count) {
 
 // Said in words, without jargon, because the whole point of this panel is that a reader with
 // no market-structure background understands it unaided (REQ-13).
-export const QUEUE_CAPTION = 'Each block is one order, waiting its turn in line at that price';
+export const QUEUE_CAPTION = 'Each part of the bar is one order, waiting its turn in line at that price';
 
-// One queue's view of itself: the orders that fit on screen, numbered from 1, each with its
-// share of the largest order in the queue, plus what is left behind them.
+// And what the bar itself is, said explicitly: the ladder on the left gives this price one
+// row, and this is that one row opened up. Without this line the panel is a second picture;
+// with it, it is a closer look at the first.
+export const QUEUE_LEVEL_CAPTION =
+  'One bar is one price - everything resting there, split into the separate orders it is made of';
+
+// A segment narrower than this is a hairline nobody can count, so it is widened to here and
+// the room comes off the segments that can spare it. Stated once, so the same sliver is the
+// same width in both bars. A couple of pixels of it go to the join with the segment in front,
+// which is why it is not smaller.
+export const QUEUE_MIN_SEGMENT_WIDTH = 10;
+
+// How many orders a bar shows one by one. Beyond this the joins are closer together than the
+// gaps that separate them, so the rest are gathered into one trailing segment that says how
+// many it stands for.
+export const QUEUE_MAX_SEGMENTS = 8;
+
+// One price level as a single bar, cut into one segment per resting order.
 //
-// The scale is the largest order in the whole queue rather than the largest one shown, so a
-// block's width means the same thing whether or not the queue happens to overflow.
-export function queueRows(orders, { maxSlots = QUEUE_SLOTS_PER_SIDE } = {}) {
+// Widths are shares of the level's total volume, so a segment's width is what that order is
+// worth *of this price* - which is the thing the ladder cannot show. The bar is always full:
+// the segments are the level, not a sample of it.
+//
+// A queue longer than `maxSegments` keeps its earliest orders - the ones that trade next -
+// as segments of their own and gathers the rest into a trailing segment carrying their count
+// and their volume, so a long queue never draws as a short one.
+export function queueSegments(orders, {
+  barWidth: room = 0,
+  maxSegments = QUEUE_MAX_SEGMENTS,
+  minSegmentWidth = QUEUE_MIN_SEGMENT_WIDTH,
+} = {}) {
   const queue = Array.isArray(orders) ? orders : [];
-  const slots = Math.max(0, Math.floor(maxSlots));
+  const width = Number.isFinite(room) && room > 0 ? room : 0;
+  const slots = Math.max(1, Math.floor(maxSegments));
+  const minWidth = Number.isFinite(minSegmentWidth) && minSegmentWidth > 0 ? minSegmentWidth : 0;
 
   const sizeOf = (order) => (Number.isFinite(order?.size) && order.size > 0 ? order.size : 0);
-  const maxSize = queue.reduce((max, order) => Math.max(max, sizeOf(order)), 0);
   const volume = queue.reduce((total, order) => total + sizeOf(order), 0);
 
-  // The earliest positions are the ones that trade next, so they are the ones kept when
-  // there is not room for all of them.
-  const shown = queue.slice(0, slots).map((order, index) => ({
+  // The last slot is spent on the tail when the tail exists, so a bar never shows more
+  // segments than it was given room for.
+  const distinct = queue.length > slots ? slots - 1 : queue.length;
+  const parts = queue.slice(0, distinct).map((order, index) => ({
     position: index + 1,
-    id: order?.id,
+    id: order?.id ?? null,
     size: sizeOf(order),
-    fraction: maxSize > 0 ? sizeOf(order) / maxSize : 0,
+    orders: 1,
+    combined: false,
+    leading: index === 0,
   }));
 
-  const hiddenOrders = queue.slice(shown.length);
+  const tail = queue.slice(distinct);
+  if (tail.length > 0) {
+    parts.push({
+      position: distinct + 1,
+      // Several orders, so no one order's id: the segment stands for all of them.
+      id: null,
+      size: tail.reduce((total, order) => total + sizeOf(order), 0),
+      orders: tail.length,
+      combined: true,
+      leading: parts.length === 0,
+    });
+  }
 
-  return {
-    shown,
-    hidden: hiddenOrders.length,
-    hiddenVolume: hiddenOrders.reduce((total, order) => total + sizeOf(order), 0),
-    total: queue.length,
-    volume,
-    maxSize,
-  };
+  const widths = segmentWidths(parts.map((part) => part.size), width, minWidth);
+
+  let x = 0;
+  const segments = parts.map((part, index) => {
+    const segment = {
+      ...part,
+      x,
+      width: widths[index],
+      fraction: volume > 0 ? part.size / volume : 0,
+    };
+    x += widths[index];
+    return segment;
+  });
+
+  return { segments, total: queue.length, volume, combined: tail.length, barWidth: width };
 }
 
-// Place the two queues either side of the centre line, ask above and bid below, mirroring
-// the ladder. Position 1 is against the line on each side, so "nearest the middle" and "next
-// to trade" are the same thing on screen and the panel reads as a zoom into the two ladder
-// rows either side of its touch.
-//
-// `y` is the top edge of the block; `maxSlots` is how many are reserved a side, which fixes
-// the block height so blocks do not move as the queue lengthens.
-export function queueLayout(model, { height, maxSlots = QUEUE_SLOTS_PER_SIDE, barSpace = 0 }) {
-  const slots = Math.max(0, Math.floor(maxSlots));
-  const centreY = height / 2;
-  const rowHeight = slots > 0 ? height / (2 * slots) : 0;
+// Share `room` between segments in proportion to their sizes, with nothing below `minWidth`
+// and the whole of it used.
+function segmentWidths(sizes, room, minWidth) {
+  const count = sizes.length;
+  if (count === 0) return [];
 
-  const place = (side, sideModel, towards) =>
-    (sideModel?.shown ?? []).map((row) => ({
-      ...row,
+  const volume = sizes.reduce((total, size) => total + size, 0);
+
+  // Nothing to be in proportion to, or not enough room to give every segment its minimum: an
+  // equal share is the most an honest bar can say, and it still fills exactly.
+  if (volume <= 0 || room < count * minWidth) return sizes.map(() => room / count);
+
+  // Multiplied before divided, so a size that is an exact share of the bar gets an exact
+  // width rather than one a rounding away from it.
+  const widths = sizes.map((size) => (size * room) / volume);
+  const pinned = sizes.map(() => false);
+
+  // Widening one sliver takes room from the rest, which can push another below the minimum,
+  // so this repeats until everything left is above it. It terminates because each pass pins
+  // one more segment.
+  for (;;) {
+    const index = widths.findIndex((width, i) => !pinned[i] && width < minWidth);
+    if (index === -1) break;
+
+    pinned[index] = true;
+    widths[index] = minWidth;
+
+    const free = room - pinned.filter(Boolean).length * minWidth;
+    const freeVolume = sizes.reduce((total, size, i) => (pinned[i] ? total : total + size), 0);
+    const freeCount = pinned.filter((isPinned) => !isPinned).length;
+    for (let i = 0; i < count; i += 1) {
+      if (pinned[i]) continue;
+      widths[i] = freeVolume > 0 ? (sizes[i] * free) / freeVolume : free / freeCount;
+    }
+  }
+
+  // Floating point leaves the odd fraction of a pixel over. It goes to the widest segment,
+  // which is the one that can absorb it invisibly - and never to a pinned sliver, which is at
+  // its stated minimum for a reason.
+  const residual = room - widths.reduce((total, width) => total + width, 0);
+  if (residual !== 0) {
+    const widest = widths.reduce((best, width, i) => (width > widths[best] ? i : best), 0);
+    widths[widest] += residual;
+  }
+
+  return widths;
+}
+
+// Place the two bars either side of the centre line, sellers above and buyers below, so the
+// panel keeps the ladder's arrangement while being a different kind of picture: one bar a
+// side rather than one row an order.
+//
+// `queues` is { bid: { price, orders }, ask: { price, orders } } - the two touch queues as
+// the engine returns them. A side with nothing resting on it contributes no bar.
+export function queueBarLayout(queues, {
+  height = 0,
+  barSpace = 0,
+  maxSegments = QUEUE_MAX_SEGMENTS,
+  minSegmentWidth = QUEUE_MIN_SEGMENT_WIDTH,
+  gap = 0,
+} = {}) {
+  const room = Number.isFinite(height) && height > 0 ? height : 0;
+  const centreY = room / 2;
+  const width = Number.isFinite(barSpace) && barSpace > 0 ? barSpace : 0;
+
+  // Tall enough to hold a label inside a segment, short enough that both bars and their
+  // headings sit either side of the touch without crowding it.
+  const barHeight = Math.max(0, Math.min(112, Math.max(0, centreY - gap) * 0.62));
+
+  const bar = (side, queue, towards) => {
+    const model = queueSegments(queue?.orders, { barWidth: width, maxSegments, minSegmentWidth });
+    if (model.segments.length === 0) return [];
+
+    return [{
+      ...model,
       side,
-      y: towards === 'up' ? centreY - row.position * rowHeight : centreY + (row.position - 1) * rowHeight,
-      barWidth: barWidth(row.size, sideModel.maxSize, barSpace),
-    }));
+      price: queue?.price ?? null,
+      y: towards === 'up' ? centreY - gap - barHeight : centreY + gap,
+      height: barHeight,
+      width,
+    }];
+  };
 
   return {
     centreY,
-    rowHeight,
-    rows: [...place('ask', model?.ask, 'up'), ...place('bid', model?.bid, 'down')],
+    barHeight,
+    bars: [...bar('ask', queues?.ask, 'up'), ...bar('bid', queues?.bid, 'down')],
   };
+}
+
+// What one segment says inside itself: a volume for a single order, and a count for the
+// trailing segment that stands for several.
+export function formatQueueSegmentLabel(segment) {
+  if (!segment) return '';
+  if (segment.combined) {
+    const count = Math.max(0, Math.round(segment.orders ?? 0));
+    return `+${count} ${count === 1 ? 'order' : 'orders'}`;
+  }
+  return formatVolume(segment.size);
 }
 
 // An ordinal, so a rank is never read as another size sitting next to one (NFR-3).
@@ -193,17 +316,18 @@ export function formatQueuePosition(position) {
   return `${n}${suffix}`;
 }
 
-// What is waiting behind the last block on screen. Empty when nothing is hidden, so the
-// drawing has nothing to say rather than something to say about zero orders.
+// What the trailing segment stands for, spelled out in a sentence for a segment too narrow to
+// hold its own label. Empty when nothing was combined, so the drawing has nothing to say
+// rather than something to say about zero orders.
 export function formatQueueOverflow(hidden, hiddenVolume) {
   if (!Number.isFinite(hidden) || hidden <= 0) return '';
   const count = Math.round(hidden);
-  return `+ ${count} more order${count === 1 ? '' : 's'} behind, ${formatVolume(hiddenVolume)} in total`;
+  return `The last part is ${count} more order${count === 1 ? '' : 's'}, ${formatVolume(hiddenVolume)} in total`;
 }
 
 // The one sentence that carries the point of the panel: position in the queue is worth
-// something. It sits under the caption rather than on any single block, so it is read once.
-const QUEUE_RULE_CAPTION = 'The block nearest the middle line is the next one to trade';
+// something. It sits under the caption rather than on any single segment, so it is read once.
+const QUEUE_RULE_CAPTION = 'The part at the left-hand end of each bar is the next order to trade';
 
 // --- drawing ---------------------------------------------------------------------------
 
@@ -244,21 +368,18 @@ export function drawLadder(canvas, data, { maxLevels = LADDER_ROWS_PER_SIDE } = 
 // { bid: { price, orders }, ask: { price, orders } } - the two touch queues as the engine
 // returns them. Safe to call with either side empty.
 //
-// This is the same shape as the ladder on purpose: sellers above, buyers below, the touch on
-// the centre line. Where a ladder row is one price with a total, a block here is one order,
-// and the two panels line up so it reads as a zoom into the rows either side of the touch.
-export function drawQueues(canvas, queues, { maxSlots = QUEUE_SLOTS_PER_SIDE } = {}) {
+// One bar a side, broken into a segment per resting order: the ladder gives this price a
+// single row, and this is that row opened up. Sellers above the centre line and buyers below,
+// so the two panels still agree about which side is which - but a bar cut into parts is a
+// different kind of picture from a column of rows, which is what stops this reading as the
+// ladder drawn twice.
+export function drawQueues(canvas, queues, { maxSegments = QUEUE_MAX_SEGMENTS } = {}) {
   const ctx = canvas.getContext('2d');
   const { width, height } = fitToDisplay(canvas, ctx);
   ctx.clearRect(0, 0, width, height);
   if (width <= 0 || height <= 0) return;
 
   const { bid, ask } = queues ?? {};
-  const model = {
-    bid: queueRows(bid?.orders, { maxSlots }),
-    ask: queueRows(ask?.orders, { maxSlots }),
-  };
-
   const columns = queueColumnsFor(width);
   const type = {
     caption: Math.max(13, Math.min(19, width * 0.027)),
@@ -266,44 +387,31 @@ export function drawQueues(canvas, queues, { maxSlots = QUEUE_SLOTS_PER_SIDE } =
     note: Math.max(12, Math.min(17, width * 0.024)),
   };
 
-  // Cursor down from the top: the two caption lines, then the seller heading, then a line of
-  // room for the "more behind" note at the back of the ask queue.
+  // Cursor down from the top: what the panel is, then what one bar is, then which end of it
+  // trades next. Wrapped rather than clipped, so a narrow panel loses none of the sentence.
   const pad = Math.max(14, Math.min(28, height * 0.035));
-  let cursor = pad;
+  let cursor = pad + type.caption;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
 
   ctx.font = `600 ${type.caption}px ${SANS}`;
   ctx.fillStyle = THEME.text;
-  cursor += type.caption;
-  ctx.fillText(QUEUE_CAPTION, columns.pad, cursor);
+  cursor = drawWrapped(ctx, QUEUE_CAPTION, columns, cursor, type.caption * 1.35);
 
-  ctx.font = `500 ${type.caption}px ${SANS}`;
+  ctx.font = `500 ${type.note}px ${SANS}`;
   ctx.fillStyle = THEME.muted;
-  cursor += type.caption * 1.45;
-  ctx.fillText(QUEUE_RULE_CAPTION, columns.pad, cursor);
+  cursor += type.note * 0.5;
+  cursor = drawWrapped(ctx, QUEUE_LEVEL_CAPTION, columns, cursor, type.note * 1.35);
+  cursor = drawWrapped(ctx, QUEUE_RULE_CAPTION, columns, cursor, type.note * 1.35);
 
-  cursor += type.header * 1.7;
-  drawQueueHeading(ctx, columns, cursor, type, 'ask', ask?.price, model.ask, 'Sellers waiting');
-  cursor += type.note * 1.9;
-
-  const top = cursor;
-  const bottomBand = pad + type.header * 1.5 + type.note * 1.9;
-  const queueHeight = Math.max(0, height - top - bottomBand);
-  const layout = queueLayout(model, { height: queueHeight, maxSlots, barSpace: columns.barSpace });
-
-  drawQueueHeading(
-    ctx,
-    columns,
-    height - pad,
-    type,
-    'bid',
-    bid?.price,
-    model.bid,
-    'Buyers waiting',
+  const top = cursor + type.note;
+  const queueHeight = Math.max(0, height - top - pad);
+  const layout = queueBarLayout(
+    { bid, ask },
+    { height: queueHeight, barSpace: columns.barSpace, maxSegments, gap: type.note * 0.5 },
   );
 
-  if (layout.rows.length === 0) {
+  if (layout.bars.length === 0) {
     ctx.fillStyle = THEME.muted;
     ctx.font = `500 ${Math.round(Math.min(22, width * 0.035))}px ${SANS}`;
     ctx.textAlign = 'center';
@@ -312,16 +420,34 @@ export function drawQueues(canvas, queues, { maxSlots = QUEUE_SLOTS_PER_SIDE } =
     return;
   }
 
-  for (const row of layout.rows) drawQueueBlock(ctx, row, layout.rowHeight, columns, top, type);
   drawTouchRule(ctx, columns, top + layout.centreY);
 
-  // The tail of each queue, at the back of it: above the topmost seller block, below the
-  // lowest buyer block. Stated rather than dropped, so a long queue never looks like a short
-  // one.
-  const askTail = top + layout.centreY - model.ask.shown.length * layout.rowHeight;
-  const bidTail = top + layout.centreY + model.bid.shown.length * layout.rowHeight;
-  drawQueueOverflow(ctx, columns, askTail - type.note * 0.55, type, 'ask', model.ask);
-  drawQueueOverflow(ctx, columns, bidTail + type.note * 1.25, type, 'bid', model.bid);
+  for (const side of ['ask', 'bid']) {
+    const bar = layout.bars.find((candidate) => candidate.side === side);
+    const label = side === 'ask' ? 'Sellers waiting' : 'Buyers waiting';
+    const price = side === 'ask' ? ask?.price : bid?.price;
+
+    // An empty side has no bar to hang its heading off, so it is said where the bar would
+    // have been - the panel still names both sides (REQ-13).
+    if (!bar) {
+      const away = side === 'ask' ? -1 : 1;
+      const baseline = top + layout.centreY + away * (layout.barHeight * 0.5);
+      drawQueueHeading(ctx, columns, baseline, type, side, price, null, label);
+      continue;
+    }
+
+    drawQueueBar(ctx, bar, columns, top);
+
+    const barTop = top + bar.y;
+    const heading = side === 'ask' ? barTop - type.note * 1.9 : barTop + bar.height + type.header * 1.05;
+    drawQueueHeading(ctx, columns, heading, type, side, price, bar, label);
+
+    // What the trailing segment stands for, next to the end of the bar it belongs to: above
+    // the sellers' bar, below the buyers'. Stated rather than dropped, so a long queue never
+    // looks like a short one.
+    const note = side === 'ask' ? heading - type.header * 1.15 : heading + type.note * 1.6;
+    drawQueueOverflow(ctx, columns, note, type, side, bar);
+  }
 }
 
 // --- drawing internals ------------------------------------------------------------------
@@ -432,77 +558,73 @@ function drawColumnHeadings(ctx, columns, y) {
   ctx.fillText('Separate orders', columns.ordersRight, y);
 }
 
-// The queue's own columns: the position ordinal on the left, then the block, then the size
-// of that one order on the right. Narrower than the ladder's - this panel holds three things
-// per line, not four.
+// The queue's own columns: one bar across the full width of the panel, because the bar is the
+// price level and nothing shares a line with it. Everything else - which side, which price,
+// what it adds up to - is said above or below it.
 function queueColumnsFor(width) {
   const pad = Math.max(16, width * 0.04);
-  const gap = Math.max(10, width * 0.022);
-  const positionWidth = Math.max(52, width * 0.1);
-  const sizeWidth = Math.max(62, width * 0.13);
-
-  const barLeft = pad + positionWidth + gap;
-  const barRight = width - pad - sizeWidth - gap;
 
   return {
     width,
     pad,
-    positionX: pad,
-    barLeft,
-    barSpace: Math.max(0, barRight - barLeft),
+    barLeft: pad,
+    barSpace: Math.max(0, width - 2 * pad),
     sizeRight: width - pad,
   };
 }
 
-// One order. A block rather than a bar: it has a left edge and a right edge, and the reader
-// is meant to count them. The one at position 1 is drawn solid and in full colour, because
-// being at the front of the queue is the property this panel exists to show.
-function drawQueueBlock(ctx, row, rowHeight, columns, top, type) {
-  const palette = THEME[row.side];
-  const next = row.position === 1;
-  const y = top + row.y;
-  const middle = y + rowHeight / 2;
-  const blockHeight = Math.max(8, Math.min(30, rowHeight * 0.66));
-  const blockY = middle - blockHeight / 2;
-  const fontSize = Math.max(13, Math.min(24, rowHeight * 0.56));
+// One price level: a single outlined bar, cut into a segment per resting order. The joins are
+// what make it a Level 3 picture, so they are drawn as gaps in the fill as well as edges -
+// countable in greyscale, and countable at the back of a room (NFR-3).
+function drawQueueBar(ctx, bar, columns, top) {
+  const palette = THEME[bar.side];
+  const y = top + bar.y;
+  if (bar.height <= 0 || bar.width <= 0) return;
 
-  // A minimum sliver of width, so that an order too small to see is still visibly an order.
-  const drawn = row.barWidth > 0 ? Math.max(3, row.barWidth) : 0;
-  if (drawn > 0) {
-    ctx.fillStyle = next ? palette.edge : palette.bar;
-    ctx.fillRect(columns.barLeft, blockY, drawn, blockHeight);
-    if (!next) {
+  // The join between two segments. Narrow enough that the bar still reads as one object,
+  // wide enough to be a visible break rather than a smudge.
+  const join = Math.max(2, Math.min(4, bar.width * 0.006));
+  const fontSize = Math.max(11, Math.min(20, bar.height * 0.4));
+
+  for (const segment of bar.segments) {
+    const isFirst = segment.x === 0;
+    const left = columns.barLeft + segment.x + (isFirst ? 0 : join);
+    const drawn = Math.max(1, segment.width - (isFirst ? 0 : join));
+
+    // The leading segment is the one that trades next, so it is the only solid one: emphasis
+    // that survives greyscale, on top of its position at the head of the bar.
+    ctx.fillStyle = segment.leading ? palette.edge : palette.bar;
+    ctx.fillRect(left, y, drawn, bar.height);
+
+    if (!segment.leading) {
       ctx.strokeStyle = palette.edge;
-      ctx.lineWidth = 1.5;
-      ctx.strokeRect(columns.barLeft + 0.75, blockY + 0.75, Math.max(1.5, drawn - 1.5), blockHeight - 1.5);
+      ctx.lineWidth = 1;
+      ctx.strokeRect(left + 0.5, y + 0.5, Math.max(1, drawn - 1), bar.height - 1);
+    }
+
+    // A label only where it fits: a segment too narrow for its own number is accounted for by
+    // the totals above the bar and, at the tail, by the note beside it.
+    const text = segment.leading
+      ? `${formatQueuePosition(segment.position)}  ${formatQueueSegmentLabel(segment)}`
+      : formatQueueSegmentLabel(segment);
+    ctx.font = `${segment.leading ? 700 : 500} ${fontSize}px ${segment.combined ? SANS : MONO}`;
+    if (ctx.measureText(text).width + fontSize <= drawn) {
+      ctx.fillStyle = segment.leading ? THEME.solidInk : THEME.text;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, left + drawn / 2, y + bar.height / 2);
     }
   }
 
-  ctx.textBaseline = 'middle';
-  ctx.font = `${next ? 700 : 600} ${fontSize}px ${MONO}`;
-  ctx.textAlign = 'left';
-  ctx.fillStyle = next ? palette.text : THEME.muted;
-  ctx.fillText(formatQueuePosition(row.position), columns.positionX, middle);
-
-  ctx.textAlign = 'right';
-  ctx.fillStyle = THEME.text;
-  ctx.fillText(formatVolume(row.size), columns.sizeRight, middle);
-
-  // Every block carries a bare number on the right, so the column is named once - on the
-  // first block, where a reader looks first. The same word the ladder uses for the same
-  // quantity, because the ladder's total for this price is these numbers added up.
-  if (next) {
-    ctx.font = `500 ${Math.max(10, type.note * 0.72)}px ${SANS}`;
-    ctx.fillStyle = THEME.muted;
-    ctx.textAlign = 'right';
-    const offset = (row.side === 'ask' ? -1 : 1) * (blockHeight / 2 + type.note * 0.62);
-    ctx.fillText('volume', columns.sizeRight, middle + offset);
-  }
+  // The level, outlined once around all of it: the segments are parts of this one thing.
+  ctx.strokeStyle = palette.edge;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(columns.barLeft + 1, y + 1, bar.width - 2, bar.height - 2);
 }
 
-// Whose queue this is, at what price, and what it adds up to - the same two numbers the
-// ladder row for that price shows, so the two panels can be read against each other.
-function drawQueueHeading(ctx, columns, baseline, type, side, price, model, label) {
+// Whose bar this is, at what price, and what it adds up to - the same two numbers the ladder
+// row for that price shows, so the two panels can be read against each other.
+function drawQueueHeading(ctx, columns, baseline, type, side, price, bar, label) {
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
 
@@ -513,29 +635,56 @@ function drawQueueHeading(ctx, columns, baseline, type, side, price, model, labe
 
   ctx.font = `600 ${type.header}px ${SANS}`;
   ctx.fillStyle = THEME[side].text;
-  const heading = model.total === 0 ? `${label} - none` : `${label} at ${formatPrice(price)}`;
+  const heading = bar === null ? `${label} - none` : `${label} at ${formatPrice(price)}`;
   ctx.fillText(heading, columns.pad + marker + type.header * 0.5, baseline);
 
-  if (model.total === 0) return;
+  if (bar === null) return;
   ctx.font = `500 ${type.note}px ${SANS}`;
   ctx.fillStyle = THEME.muted;
   ctx.textAlign = 'right';
   ctx.fillText(
-    `${formatOrderCount(model.total)}, ${formatVolume(model.volume)} in all`,
+    `${formatOrderCount(bar.total)} in this bar, ${formatVolume(bar.volume)} altogether`,
     columns.sizeRight,
     baseline,
   );
 }
 
-function drawQueueOverflow(ctx, columns, baseline, type, side, model) {
-  const text = formatQueueOverflow(model.hidden, model.hiddenVolume);
+function drawQueueOverflow(ctx, columns, baseline, type, side, bar) {
+  const tail = bar.segments.at(-1);
+  const text = formatQueueOverflow(bar.combined, tail?.size);
   if (text === '') return;
 
   ctx.font = `500 ${type.note}px ${SANS}`;
   ctx.fillStyle = THEME[side].text;
-  ctx.textAlign = 'left';
+  ctx.textAlign = 'right';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText(text, columns.barLeft, baseline);
+  ctx.fillText(text, columns.sizeRight, baseline);
+}
+
+// Draw `text` at the panel's left margin, broken on words to fit the width, and return the
+// baseline the next line would use. The captions are the panel's whole explanation (REQ-13),
+// so a narrow panel wraps them rather than running them off the edge.
+function drawWrapped(ctx, text, columns, baseline, lineHeight) {
+  const room = columns.width - 2 * columns.pad;
+  let line = '';
+  let y = baseline;
+
+  for (const word of String(text).split(' ')) {
+    const candidate = line === '' ? word : `${line} ${word}`;
+    if (line !== '' && ctx.measureText(candidate).width > room) {
+      ctx.fillText(line, columns.pad, y);
+      y += lineHeight;
+      line = word;
+    } else {
+      line = candidate;
+    }
+  }
+
+  if (line !== '') {
+    ctx.fillText(line, columns.pad, y);
+    y += lineHeight;
+  }
+  return y;
 }
 
 // Where the two sides meet. The best bid is immediately below this line and the best ask
