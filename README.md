@@ -16,7 +16,8 @@ Every line of the application was written by an AI agent responding to a Jira ti
 first and the code follows from it, not the other way round.
 
 The scaffolding — workflows, agent prompts, the Jira toolkit — was written by hand.
-**How it works, and how to adapt it for your own project, is in [`FACTORY.md`](FACTORY.md).**
+**How it works and why:** [`FACTORY.md`](FACTORY.md).
+**How to build the same thing yourself, step by step:** [`SETUP.md`](SETUP.md).
 
 ## How it gets built
 
@@ -56,7 +57,8 @@ python3 -m http.server -d public 8000
 | `test/` | Unit tests, run with `node --test` |
 | `.factory/` | Agent prompts — read at runtime, so they can be iterated without touching a workflow |
 | `scripts/` | Jira toolkit, run telemetry, demo reset tooling |
-| `FACTORY.md` | How the factory works and why — start here if you want to copy it |
+| `FACTORY.md` | How the factory works and why |
+| `SETUP.md` | Step-by-step guide to standing up your own |
 
 Application source lives under `public/src/`, with the module boundaries fixed by §6 of the PRD
 rather than chosen during implementation — so each ticket extended a known structure instead of
