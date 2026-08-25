@@ -1,0 +1,710 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Software Factory — BMLL Lunch &amp; Learn</title>
+<!--
+  The deck for the session. Hand-written, NOT built by the factory — that is stated on the
+  title slide, because claiming otherwise would be the one dishonest note in an hour spent
+  arguing for honest reporting.
+
+  Constraints it inherits from the application it sits beside:
+    NFR-1  system fonts only; no web font, because that is a runtime network call
+    NFR-2  no dependencies and no build step; this file is the whole deck
+  Consequences: everything is inline, and it opens from file:// as happily as from the site.
+  That matters — file:// is the real fallback if Netlify is unreachable mid-session.
+
+  Navigation: arrows / space / PageUp / PageDown, Home, End, "o" for an overview, "f" for
+  fullscreen. The hash carries the slide number, so a link can point at a specific slide and a
+  reload does not lose your place.
+
+  This file is PUBLIC and served from the live site during the talk. It deliberately carries no
+  timings, no fallback machinery and no presenter notes; those live in SCRIPT.md, outside the
+  repository, and the deck must not become a back door to them.
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    /* Same palette as the application, so switching tabs does not feel like switching rooms. */
+    --paper: #080d1c;
+    --panel: #0d1428;
+    --rule: #1e2a4a;
+    --ink: #e8eefc;
+    --muted: #8fa0c4;
+    --bid: #59d69f;
+    --ask: #ff9a90;
+    --held: #ffbf5a;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+
+    /* Projector legibility is a measured thing, not a matter of taste. The floor is what
+       matters: 21px is the smallest body text anyone at the back of the room will read. */
+    font-size: clamp(21px, 0.85vw + 0.85vh, 34px);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--paper);
+    color: var(--ink);
+    font: 1rem/1.5 var(--sans);
+  }
+
+  /* One slide visible at a time. Slides are laid out in normal flow and hidden rather than
+     transformed, so a slide that overflows scrolls instead of silently cropping its last line
+     on a projector with an unexpected aspect ratio. */
+  .slide {
+    display: none;
+    height: 100vh;
+    overflow-y: auto;
+    padding: clamp(2rem, 5vh, 4rem) clamp(1.5rem, 5vw, 5rem) 4rem;
+  }
+  .slide[data-current] { display: flex; flex-direction: column; justify-content: center; }
+  .slide > * { width: 100%; max-width: 60rem; margin-inline: auto; }
+
+  h1 { font-size: 2.6rem; line-height: 1.1; letter-spacing: -.02em; margin: 0 0 1rem; }
+  h2 {
+    font-size: 1.9rem; line-height: 1.15; letter-spacing: -.015em;
+    margin: 0 0 1.5rem; text-wrap: balance;
+  }
+  h2 .eyebrow {
+    display: block;
+    font-size: .72rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--muted); font-weight: 600; margin-bottom: .7rem;
+  }
+  p { margin: 0 0 1rem; max-width: 46ch; }
+  .wide p, .wide li { max-width: none; }
+  strong { color: #fff; font-weight: 650; }
+  em { color: var(--held); font-style: normal; font-weight: 600; }
+
+  ul { margin: 0 0 1rem; padding-left: 1.3em; }
+  li { margin-bottom: .7rem; max-width: 48ch; }
+  li::marker { color: var(--muted); }
+
+  .lede { font-size: 1.25rem; color: var(--muted); max-width: 40ch; }
+  .caption {
+    font-size: .82rem; color: var(--muted); max-width: 62ch;
+    border-left: 3px solid var(--rule); padding-left: .9rem; margin-top: 1.4rem;
+  }
+  /* Every diagram and every piece of code gets one plain sentence saying what it is. The room
+     is half non-engineers; that sentence is the thing that is hard to improvise. */
+  .plain { color: var(--bid); font-weight: 650; }
+
+  .big { font-size: 4.2rem; line-height: 1; letter-spacing: -.03em; font-weight: 700; }
+  .huge { font-size: 6rem; line-height: .95; letter-spacing: -.04em; font-weight: 700; }
+  .green { color: var(--bid); }
+  .red { color: var(--ask); }
+  .amber { color: var(--held); }
+
+  .cols { display: grid; gap: 2rem clamp(1.5rem, 4vw, 3.5rem); grid-template-columns: 1fr 1fr; }
+  @media (max-width: 60rem) { .cols { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--panel); border: 2px solid var(--rule);
+    border-radius: 14px; padding: 1.2rem 1.4rem;
+  }
+  .card h3 { margin: 0 0 .6rem; font-size: 1rem; letter-spacing: .01em; }
+  .card p:last-child, .card ul:last-child { margin-bottom: 0; }
+  .card.accent { border-color: var(--bid); }
+  .card.warn { border-color: var(--ask); }
+
+  table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+  th, td { padding: .5rem .7rem; text-align: left; border-bottom: 1px solid var(--rule); }
+  th { font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  td.num, th.num { text-align: right; }
+  tr.highlight td { background: rgba(255,191,90,.09); }
+
+  code, .mono { font-family: var(--mono); }
+  pre {
+    background: var(--panel); border: 2px solid var(--rule); border-radius: 12px;
+    padding: 1rem 1.2rem; margin: 0 0 1rem; overflow-x: auto;
+    font-family: var(--mono); font-size: .78rem; line-height: 1.7;
+    color: var(--muted); white-space: pre-wrap;
+  }
+  pre b { color: var(--held); font-weight: 600; }
+  pre i { color: var(--bid); font-style: normal; }
+
+  .stat { display: flex; flex-wrap: wrap; gap: 1.6rem 3rem; margin-bottom: 1.4rem; }
+  .stat div { min-width: 8rem; }
+  .stat .n { font-size: 3rem; line-height: 1; font-weight: 700; letter-spacing: -.03em; }
+  .stat .k { font-size: .74rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: .4rem; }
+
+  svg { width: 100%; height: auto; display: block; }
+
+  /* --- chrome ------------------------------------------------------------ */
+  .bar {
+    position: fixed; left: 0; bottom: 0; height: 4px;
+    background: var(--bid); transition: width .18s ease; z-index: 5;
+  }
+  .num-badge {
+    position: fixed; right: 1rem; bottom: .7rem; z-index: 5;
+    font: 600 .7rem/1 var(--mono); color: var(--muted); letter-spacing: .1em;
+  }
+  .hint {
+    position: fixed; left: 1rem; bottom: .7rem; z-index: 5;
+    font: 600 .7rem/1 var(--sans); color: var(--rule); letter-spacing: .06em;
+  }
+
+  /* Overview: titles only. Deliberately carries no timings and no notes — see the comment at
+     the top of this file. */
+  #overview {
+    position: fixed; inset: 0; z-index: 10; display: none;
+    background: rgba(8,13,28,.97); padding: 3rem clamp(1.5rem,5vw,5rem); overflow-y: auto;
+  }
+  #overview[data-open] { display: block; }
+  #overview ol { max-width: 52rem; margin: 0 auto; padding-left: 2.5rem; }
+  #overview li { font-size: .92rem; margin-bottom: .55rem; cursor: pointer; max-width: none; }
+  #overview li:hover, #overview li[data-current] { color: var(--bid); }
+
+  @media print { .slide { display: block !important; height: auto; page-break-after: always; } }
+</style>
+
+<div class="bar" id="bar"></div>
+<div class="num-badge" id="badge"></div>
+<div class="hint">← → navigate · O overview · F fullscreen</div>
+<nav id="overview" aria-label="Slide overview" hidden><ol id="overview-list"></ol></nav>
+
+<main id="deck">
+
+<!-- 1 ------------------------------------------------------------------- -->
+<section class="slide" data-title="Title">
+  <h1>A ticket goes in.<br>Software comes out.</h1>
+  <p class="lede">An order book simulator, built entirely by an AI agent responding to Jira
+    tickets. Ten tickets, 114 tests, five modules, and no human wrote a line of it.</p>
+  <p class="caption">Every number in the application is synthetic and generated in your browser.
+    No feed, no venue, no instrument, no licence.<br><br>
+    <strong>These slides are hand-written.</strong> The factory did not build them, and saying
+    so matters in a talk about reporting honestly.</p>
+</section>
+
+<!-- 2 ------------------------------------------------------------------- -->
+<section class="slide wide" data-title="What is a software factory?">
+  <h2><span class="eyebrow">What is a software factory?</span>A production line where the raw
+    material is a ticket</h2>
+  <svg viewBox="0 0 1200 470" role="img"
+       aria-label="A ticket moves to the agent, which decides whether it is good enough to build. If not it returns to Jira with a question. If it is, the agent writes tests, then code, then opens a pull request with a private preview. A human then decides whether it ships.">
+    <defs>
+      <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#8fa0c4"/>
+      </marker>
+      <marker id="ar-g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#59d69f"/>
+      </marker>
+    </defs>
+    <g font-family="ui-sans-serif, system-ui, sans-serif" fill="#e8eefc">
+
+      <!-- plumbing: deliberately quiet -->
+      <rect x="16" y="150" width="150" height="90" rx="12" fill="#0d1428" stroke="#1e2a4a" stroke-width="2"/>
+      <text x="91" y="188" font-size="20" text-anchor="middle" fill="#8fa0c4">A ticket</text>
+      <text x="91" y="214" font-size="20" text-anchor="middle" fill="#8fa0c4">in Jira</text>
+
+      <rect x="520" y="135" width="240" height="120" rx="12" fill="#0d1428" stroke="#1e2a4a" stroke-width="2"/>
+      <text x="545" y="172" font-size="19" fill="#8fa0c4">1 · Tests first</text>
+      <text x="545" y="203" font-size="19" fill="#8fa0c4">2 · Then the code</text>
+      <text x="545" y="234" font-size="19" fill="#8fa0c4">3 · A private preview</text>
+
+      <rect x="1090" y="150" width="94" height="90" rx="12" fill="#0d1428" stroke="#59d69f" stroke-width="2"/>
+      <text x="1137" y="202" font-size="21" text-anchor="middle" fill="#59d69f">Live</text>
+
+      <!-- the two boxes that matter: larger, brighter, labelled -->
+      <text x="335" y="106" font-size="15" text-anchor="middle" fill="#ffbf5a" letter-spacing="2.5">THE AGENT DECIDES</text>
+      <rect x="210" y="120" width="250" height="150" rx="14" fill="#0d1428" stroke="#ffbf5a" stroke-width="3"/>
+      <text x="335" y="176" font-size="22" text-anchor="middle" font-weight="600">Is this ticket</text>
+      <text x="335" y="206" font-size="22" text-anchor="middle" font-weight="600">good enough</text>
+      <text x="335" y="236" font-size="22" text-anchor="middle" font-weight="600">to build?</text>
+
+      <text x="935" y="106" font-size="15" text-anchor="middle" fill="#ffbf5a" letter-spacing="2.5">A PERSON DECIDES</text>
+      <rect x="810" y="120" width="250" height="150" rx="14" fill="#0d1428" stroke="#ffbf5a" stroke-width="3"/>
+      <text x="935" y="191" font-size="22" text-anchor="middle" font-weight="600">Is this right,</text>
+      <text x="935" y="221" font-size="22" text-anchor="middle" font-weight="600">and should it ship?</text>
+
+      <!-- the decline path -->
+      <rect x="210" y="345" width="250" height="90" rx="12" fill="#0d1428" stroke="#ff9a90" stroke-width="2" stroke-dasharray="7 5"/>
+      <text x="335" y="380" font-size="19" text-anchor="middle" fill="#ff9a90">Back to you, with</text>
+      <text x="335" y="406" font-size="19" text-anchor="middle" fill="#ff9a90">a specific question</text>
+
+      <!-- arrows -->
+      <g stroke="#8fa0c4" stroke-width="2.5" fill="none" marker-end="url(#ar)">
+        <path d="M170 195 H202"/>
+        <path d="M464 195 H512"/>
+        <path d="M764 195 H802"/>
+        <path d="M335 274 V337"/>
+      </g>
+      <g stroke="#59d69f" stroke-width="2.5" fill="none" marker-end="url(#ar-g)">
+        <path d="M1064 195 H1082"/>
+      </g>
+      <text x="488" y="182" font-size="15" text-anchor="middle" fill="#59d69f">yes</text>
+      <text x="358" y="312" font-size="15" fill="#ff9a90">no</text>
+    </g>
+  </svg>
+  <p class="caption"><span class="plain">In plain English:</span> a status change in Jira wakes
+    a robot. It reads the specification, reads the ticket, and decides whether it has been told
+    enough to build the thing. If it hasn't, it says so and asks. If it has, it builds — and
+    a person still decides whether it goes live.</p>
+</section>
+
+<!-- 3 ------------------------------------------------------------------- -->
+<section class="slide" data-title="What it is not">
+  <h2><span class="eyebrow">Before anything else</span>What this is not</h2>
+  <ul>
+    <li><strong>Not autocomplete in someone's editor.</strong> A pipeline with gates, not a
+      faster way to type.</li>
+    <li><strong>Not autonomous.</strong> It cannot start work. It cannot ship without a person
+      moving a ticket. It has no opinions about what is worth building.</li>
+    <li><strong>Not silent.</strong> Every run ends with a comment on the ticket saying what it
+      did, what it changed, and what it cost.</li>
+  </ul>
+  <p class="caption">Two boxes on the previous diagram are the whole talk — the agent judging
+    the ticket, and the human gate. Everything else is plumbing.</p>
+</section>
+
+<!-- 4 ------------------------------------------------------------------- -->
+<section class="slide" data-title="The bottleneck has moved">
+  <h2><span class="eyebrow">The claim</span>The bottleneck has moved</h2>
+  <p style="font-size:1.4rem;max-width:34ch">It used to be <em>building</em> the thing.<br>
+    Now it is <em>saying precisely what the thing is</em>.</p>
+  <div class="card accent" style="margin-top:1.2rem">
+    <h3>And to be clear about what that does <em>not</em> mean</h3>
+    <p>That is a claim about where the <strong>constraint</strong> sits, not about who is needed.
+      Every module boundary, every correctness property and every definition of "done" in this
+      application came from a person. What changes is where the day goes — less time on the fifth
+      CRUD form, more on the decisions the typing used to squeeze out.</p>
+    <p style="margin-top:.8rem"><strong>Engineering moves up the stack, not out of the
+      building.</strong></p>
+  </div>
+</section>
+
+<!-- 5 ------------------------------------------------------------------- -->
+<section class="slide" data-title="Requirements an AI can follow">
+  <h2><span class="eyebrow">The rest of this talk, in one line</span>Writing requirements an AI
+    can follow is just&hellip; writing good requirements</h2>
+  <p>The discipline we all already know we should apply, and mostly don't — because we can rely
+    on an experienced person at the other end quietly filling in what we left out.</p>
+  <p>There is nothing here you have not been told before.</p>
+  <p style="font-size:1.3rem"><strong>The only new thing is that vagueness now has a price and a
+    timestamp on it.</strong> It fails in four minutes instead of six weeks, and it fails in
+    front of you.</p>
+</section>
+
+<!-- 6 ------------------------------------------------------------------- -->
+<section class="slide" data-title="→ The specification">
+  <h2><span class="eyebrow">Look at this</span>Everything here was built from one document</h2>
+  <p class="lede">Every requirement has a number. A ticket does not <em>describe</em> what it
+    wants — it <em>cites</em> it.</p>
+  <p class="caption">That difference is most of the reliability. A description is an invitation
+    to interpret; a citation points at a fixed definition that two people, or an agent, can
+    both read.</p>
+</section>
+
+<!-- 7 ------------------------------------------------------------------- -->
+<section class="slide" data-title="The evidence: LLD-3">
+  <h2><span class="eyebrow">The matching engine — the piece that pairs buyers with sellers</span>
+    Built first time, unattended</h2>
+  <div class="stat">
+    <div><div class="n">15</div><div class="k">Acceptance criteria</div></div>
+    <div><div class="n">22</div><div class="k">Tests, all passing</div></div>
+    <div><div class="n green">$1.77</div><div class="k">To build</div></div>
+    <div><div class="n green">5m 15s</div><div class="k">Wall clock</div></div>
+    <div><div class="n">0</div><div class="k">Humans involved after the status change</div></div>
+  </div>
+  <p>Every criterion had real numbers in it:</p>
+  <pre>Given asks at 101 of 40 and 60, when a buy limit order of 70 at 101
+arrives, <b>then two trades — 40 then 30</b>.</pre>
+  <p class="caption">A senior engineer costs roughly $1.77 per minute. That comparison is what
+    turns this from an impressive demo into a resourcing conversation.</p>
+</section>
+
+<!-- 8 ------------------------------------------------------------------- -->
+<section class="slide wide" data-title="Lines of code is the wrong measure">
+  <h2><span class="eyebrow">The counter-intuitive bit</span>Lines of code is the wrong measure</h2>
+  <table>
+    <thead><tr><th>Ticket</th><th>What it built</th><th class="num">Lines</th><th class="num">Thinking</th><th class="num">Cost</th></tr></thead>
+    <tbody>
+      <tr class="highlight"><td>LLD-3</td><td>Order book engine</td><td class="num">509</td><td class="num">—</td><td class="num green">$1.77</td></tr>
+      <tr><td>LLD-4</td><td>Invariant harness</td><td class="num">613</td><td class="num">—</td><td class="num">$3.15</td></tr>
+      <tr class="highlight"><td>LLD-5</td><td>Order flow generator</td><td class="num">471</td><td class="num">—</td><td class="num red">$3.52</td></tr>
+      <tr><td>LLD-6</td><td>Depth ladder</td><td class="num">762</td><td class="num amber">45%</td><td class="num">$4.67</td></tr>
+      <tr><td>LLD-7</td><td>Queue view</td><td class="num">675</td><td class="num amber">33%</td><td class="num">$3.80</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:1.4rem;font-size:1.2rem;max-width:none"><strong>509 lines for $1.77.
+    471 lines for $3.52.</strong> Fewer lines, double the cost.</p>
+  <p class="caption"><span class="plain">In plain English:</span> what costs money is not typing,
+    it is <em>thinking</em>. On one ticket, 45% of the model's output was reasoning rather than
+    code — that is a measurement off the invoice, not a metaphor. Which means a vague ticket is
+    not only riskier, it is <strong>more expensive</strong>: the agent has to reason its way to a
+    decision the ticket should have made.</p>
+</section>
+
+<!-- 9 ------------------------------------------------------------------- -->
+<section class="slide wide" data-title="What made the ticket work">
+  <h2><span class="eyebrow">The one to photograph</span>Six things that made that ticket work</h2>
+  <div class="cols">
+    <div>
+      <ul>
+        <li><strong>Concrete criteria, not abstract ones.</strong> Numbers, not adjectives.</li>
+        <li><strong>Criteria that read as test names.</strong> They became the 22 tests almost
+          verbatim, so the tests can be read against the ticket line by line.</li>
+        <li><strong>A citation, not a description.</strong> "Implements REQ-1..REQ-4."</li>
+      </ul>
+    </div>
+    <div>
+      <ul>
+        <li><strong>An explicit out-of-scope list.</strong> Without one, a helpful agent
+          gold-plates.</li>
+        <li><strong>A stated visual expectation</strong> — here, deliberately <em>none</em>.
+          Saying so stops it inventing something to show.</li>
+        <li><strong>Named constraints.</strong> The boundaries it must not cross.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 10 ------------------------------------------------------------------ -->
+<section class="slide" data-title="Size the ticket to the interface">
+  <h2><span class="eyebrow">Where my instinct was wrong</span>Size the ticket to the interface,
+    not to the effort</h2>
+  <p>My instinct was lots of small tickets — the way you would break work down for a team. Slice
+    the engine into "add limit orders", then "add market orders", then "add cancellations".</p>
+  <p><strong>The second agent inherits whatever shape the first invented</strong>, and it cannot
+    ask the first one anything — that conversation is over and the context is gone. One design
+    decision becomes a negotiation between two robots who cannot talk to each other.</p>
+  <div class="card accent">
+    <h3>The real question is not "is this too big"</h3>
+    <p>It is <em>do the acceptance criteria fully constrain the outcome?</em> A vague small ticket
+      is no safer than a vague big one. Split when a ticket spans <strong>modules</strong> —
+      separate interfaces, separate owners. Which is, on reflection, exactly how you would hand
+      work to people.</p>
+  </div>
+</section>
+
+<!-- 11 ------------------------------------------------------------------ -->
+<section class="slide" data-title="The ticket was wrong">
+  <h2><span class="eyebrow">A true story, and it is on me</span>The ticket was wrong</h2>
+  <p class="lede">It claimed a bid of 99 against an ask of 101 gives <strong>100</strong> basis
+    points — and quoted the formula that gives <strong>200</strong>.</p>
+  <p>Both are standard conventions. They differ by a factor of two.</p>
+  <p>I wrote it. I reviewed it. I seeded it onto the board. <strong>Nobody caught it.</strong></p>
+  <p style="font-size:1.25rem"><em>The agent caught it.</em> It refused to build, and named the
+    exact ambiguity.</p>
+</section>
+
+<!-- 12 ------------------------------------------------------------------ -->
+<section class="slide wide" data-title="A green build of the wrong requirement">
+  <h2><span class="eyebrow">Same ticket, a cheaper model</span>It found the contradiction — then
+    worked around it</h2>
+  <p style="max-width:none"><span class="plain">In plain English:</span> this is the model
+    thinking out loud, and it committed the thinking into the test file.</p>
+  <pre>// bps = (ask - bid) / mid * 10000
+// So: (101 - 99) / 100 * 10000 = 200
+// Let me re-read: "spread divided by mid, times 10000"
+<b>// Oh! I think I misread. Let me re-read the ticket...</b>
+<b>// Yes! That's it! The formula is probably: ((ask - bid) / 2) / mid * 10000</b></pre>
+  <p style="max-width:none">It shipped a formula reverse-engineered to produce my wrong number.
+    <i>All tests passed.</i> It reported success.</p>
+  <p class="caption" style="border-color:var(--ask)"><strong>This is the failure mode to be
+    frightened of.</strong> Not a crash. Not a red test. <em>A green build of the wrong
+    requirement, reported confidently</em> — and a reviewer skimming a green tick would have
+    approved it.</p>
+</section>
+
+<!-- 13 ------------------------------------------------------------------ -->
+<section class="slide wide" data-title="So how do we protect ourselves?">
+  <h2><span class="eyebrow">The fair challenge</span>"So you fixed it by buying a bigger model.
+    That is not a fix."</h2>
+  <p style="max-width:none;font-size:1.15rem">Correct. <strong>A better model shifts the odds. It
+    does not remove the failure class.</strong> Anyone who tells you a model choice makes this
+    safe is selling something.</p>
+  <p style="max-width:none">So do not defend at the model. Defend where it does not matter what
+    the model thought the ticket meant:</p>
+  <div class="cols">
+    <div class="card accent">
+      <h3>1 · Invariants</h3>
+      <p>Rules that must hold for every input, written by a person, from the domain,
+        <strong>before the ticket existed</strong>. The wrong build passed every test it wrote —
+        because it wrote them from its own misreading. No interpretation survives a rule it did
+        not author.</p>
+    </div>
+    <div class="card">
+      <h3>2 · The human gate</h3>
+      <p>The number was on screen, in a preview, before anything shipped. A person looking at a
+        rendered figure is a genuinely different kind of check from any test.</p>
+    </div>
+    <div class="card warn">
+      <h3>3 · An adversarial reviewer</h3>
+      <p>A second agent whose only job is to attack the change. <strong>We have not built
+        it.</strong> This is the strongest argument for it — and saying so beats implying we have
+        a layer we don't.</p>
+    </div>
+    <div class="card">
+      <h3>And the honest residual</h3>
+      <p>A wrong requirement that no invariant covers and no reviewer notices. <strong>We have
+        that hole today.</strong> Hand the same ticket to a capable contractor in week one and you
+        get the same outcome, slower and dearer. What is new is the <em>throughput</em> — which is
+        why the rails have to scale with it.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 14 ------------------------------------------------------------------ -->
+<section class="slide" data-title="→ Behind the curtain">
+  <h2><span class="eyebrow">Look at this</span>Behind the curtain</h2>
+  <ul>
+    <li><code>CLAUDE.md</code> — <span class="plain">the house rules</span>, read at the start of
+      every run. Synthetic data only. No dependencies. Never commit to <code>main</code>.</li>
+    <li><code>build-prompt.md</code> — <span class="plain">the agent's job description</span>,
+      kept outside the workflow so it can change without a merge.</li>
+    <li><code>jira.sh</code> — <span class="plain">how the robot talks to Jira.</span> Reads,
+      comments, moves statuses, and @-mentions a real person when it needs an answer.</li>
+    <li>The guardrails: it only commits to its own branch; the deploy agent refuses to merge
+      anything with a failing check; and <strong>a silent run is a failed run</strong>.</li>
+  </ul>
+  <p class="caption">One honest note: there is no required-reviewer rule on <code>main</code>,
+    because the agent doing the merge would be blocked by it. The gate is real — it just lives in
+    Jira instead of GitHub. If you copy this, know that is the trade.</p>
+</section>
+
+<!-- 15 ------------------------------------------------------------------ -->
+<section class="slide" data-title="The self-validation problem">
+  <h2><span class="eyebrow">The objection I will make for you</span>The agent wrote the code
+    <em>and</em> the tests</h2>
+  <p class="lede">So the tests confirm what it decided to build — not what we asked for.</p>
+  <p>A misunderstanding gets written down twice, and the suite goes green.</p>
+  <p style="font-size:1.2rem">That has a name: <strong>the self-validation problem</strong>. And
+    AI is unusually good at making wrong answers look right.</p>
+</section>
+
+<!-- 16 ------------------------------------------------------------------ -->
+<section class="slide" data-title="Red, then green">
+  <h2><span class="eyebrow">Defence one</span>Tests come first — and we make it provable</h2>
+  <p>"The agent says it wrote the tests first" is an assertion. So instead:</p>
+  <div class="card" style="font-family:var(--mono);font-size:.85rem;line-height:2">
+    <div><span class="red">✕</span>&nbsp; <b>commit 1</b> &nbsp;Add tests for LLD-14 (spread in basis points)</div>
+    <div><span class="green">✓</span>&nbsp; <b>commit 2</b> &nbsp;Implement basis-point spread</div>
+  </div>
+  <p style="margin-top:1.2rem">The tests are committed <strong>on their own</strong> and pushed.
+    CI runs and goes <span class="red">red</span>. The implementation lands as a second commit and
+    CI goes <span class="green">green</span>.</p>
+  <p style="font-size:1.15rem"><strong>The commit list is the evidence.</strong> A test that
+    existed before the code cannot have been shaped by it.</p>
+  <p class="caption">Be honest about the limit: this is <em>temporal</em> separation, not
+    <em>agent</em> separation. The same model still wrote both, in one sitting. Claiming full
+    independence is the fastest way to lose the engineers in the room.</p>
+</section>
+
+<!-- 17 ------------------------------------------------------------------ -->
+<section class="slide wide" data-title="The six invariants">
+  <h2><span class="eyebrow">Defence two</span>Six rules that must hold for every possible input</h2>
+  <p style="max-width:none"><span class="plain">In plain English:</span> an acceptance criterion
+    checks one example. An invariant is a rule we throw thousands of random orders at, and check
+    after <em>every single operation</em>.</p>
+  <div class="cols" style="gap:0 3rem">
+    <ul>
+      <li><strong>The book never crosses.</strong> The best bid is always below the best ask.</li>
+      <li><strong>Volume is conserved.</strong> Matching creates and destroys nothing.</li>
+      <li><strong>Price–time priority is respected.</strong> Among orders at the same price, the
+        earliest fills first.</li>
+    </ul>
+    <ul>
+      <li><strong>No trade-through.</strong> Liquidity is always consumed best-price-first.</li>
+      <li><strong>The book is well-formed.</strong> Nothing zero-sized rests; nothing filled
+        remains reachable.</li>
+      <li><strong>Queue integrity.</strong> Positions run from 1 with no gaps, and removing an
+        order closes the gap behind it.</li>
+    </ul>
+  </div>
+  <p class="caption">These are numbered in the specification as <code>INV-1</code>…<code>INV-6</code>,
+    so a ticket can cite them and the agent must satisfy them. They are the real correctness
+    properties of an order book — not proxies for them.</p>
+</section>
+
+<!-- 18 ------------------------------------------------------------------ -->
+<section class="slide" data-title="Break it on purpose">
+  <h2><span class="eyebrow">How do you know the green ticks mean anything?</span>Break it on
+    purpose</h2>
+  <p>Two lines changed, so the <em>newest</em> order at a price fills first instead of the
+    oldest. In a real venue that is queue-jumping, and it would be a scandal.</p>
+  <div class="stat" style="margin-top:1.6rem">
+    <div><div class="n red">10</div><div class="k">of 114 tests fail</div></div>
+    <div><div class="n">1</div><div class="k">of them is the invariant harness</div></div>
+  </div>
+  <pre>not ok 41 — Given the order at position 1 of the best ask is fully filled,
+            when the queue is read again, then the order formerly at
+            position 2 is now at position 1
+
+not ok 45 — Given a seed, when the harness runs a randomised sequence of
+            limit orders, market orders and cancellations against a book,
+            <b>then all six invariants are asserted after every single operation</b></pre>
+  <p class="caption">Note what caught it — not the example tests alone. The harness that throws
+    thousands of random orders at the book and checks the rules held every time.</p>
+</section>
+
+<!-- 19 ------------------------------------------------------------------ -->
+<section class="slide" data-title="We already have a team who do this">
+  <h2><span class="eyebrow">The part I most want to say out loud</span>We already have a team
+    whose job is writing exactly these</h2>
+  <p style="font-size:1.2rem">Invariants are not a technique I found in a blog post. The content
+    team writes data-quality invariants for a living, and engineering builds them into our
+    parsers.</p>
+  <p><strong>That discipline is what makes generated code safe to trust.</strong></p>
+  <div class="card accent">
+    <p style="font-size:1.15rem;margin:0">The factory is only as trustworthy as the invariants
+      guarding it — and we already have a team whose job is writing precisely those.</p>
+  </div>
+  <p class="caption">Which reframes the whole thing. Not "automation replaces people": the
+    content team's existing discipline becomes the safety rail, and the rail scales with the
+    automation instead of lagging it.</p>
+</section>
+
+<!-- 20 ------------------------------------------------------------------ -->
+<section class="slide" data-title="→ Close the loop">
+  <h2><span class="eyebrow">Look at this</span>The ticket we started with is done</h2>
+  <p class="lede">A private preview. Nothing has changed for anyone but me.</p>
+  <p><strong>This is the human gate.</strong> I look at it, and I decide. If it is wrong it stops
+    here and goes back with a comment.</p>
+</section>
+
+<!-- 21 ------------------------------------------------------------------ -->
+<section class="slide wide" data-title="What this proves, and what it doesn't">
+  <h2><span class="eyebrow">Being straight about it</span>What this proves, and what it doesn't</h2>
+  <div class="cols">
+    <div class="card accent">
+      <h3>Proves</h3>
+      <ul style="margin:0">
+        <li>A well-specified ticket becomes tested, previewable, deployed software with no human
+          writing code.</li>
+        <li>An agent will decline work it cannot responsibly do.</li>
+        <li>A whole small application can be built this way, from a specification.</li>
+      </ul>
+    </div>
+    <div class="card warn">
+      <h3>Does not prove</h3>
+      <ul style="margin:0">
+        <li>That we can point this at our large, complex, long-lived systems tomorrow.</li>
+        <li>This is a small application with nothing at stake, built from a specification that
+          did not exist until it was written for the purpose.</li>
+        <li>That is a real gap, and I would rather name it than have you find it.</li>
+      </ul>
+    </div>
+  </div>
+  <p class="caption" style="max-width:none"><strong>Total cost of everything you have seen:
+    $38.78</strong> — including two failed runs, because quoting only the successes would be its
+    own kind of dishonesty.</p>
+</section>
+
+<!-- 22 ------------------------------------------------------------------ -->
+<section class="slide wide" data-title="The ask">
+  <h2><span class="eyebrow">Four things have to be true first</span>And note the order</h2>
+  <table>
+    <thead><tr><th>Prerequisite</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><strong>A staging environment</strong></td><td>This deploys straight to production because nothing is at stake. Anything real cannot.</td></tr>
+      <tr><td><strong>A real test suite</strong></td><td>The agent is only as safe as what it can run.</td></tr>
+      <tr><td><strong>A risk tier for changes</strong></td><td>A label change and a change to business logic must not travel the same path.</td></tr>
+      <tr class="highlight"><td><strong>A written specification</strong></td><td>What you specify is what you get. There is no way around this one.</td></tr>
+    </tbody>
+  </table>
+  <p style="margin-top:1.4rem;font-size:1.2rem;max-width:none">The first three are engineering
+    work. <strong>The fourth is the one that actually gates everything</strong> — and it is
+    product work.</p>
+  <p class="caption">Every item on that list is a specification problem, not a model problem. The
+    models are already good enough. What limits us is how precisely we can say what we want.</p>
+</section>
+
+<!-- 23 ------------------------------------------------------------------ -->
+<section class="slide wide" data-title="The Definition of Ready">
+  <h2><span class="eyebrow">Over to you — this is the gate your ticket has to pass</span>The
+    Definition of Ready</h2>
+  <p style="max-width:none">The agent builds it only if <strong>all four</strong> are true:</p>
+  <div class="cols" style="gap:1.2rem 2rem">
+    <div class="card accent"><h3>1 · A clear outcome</h3>
+      <p>What can a user do afterwards that they cannot now?</p></div>
+    <div class="card accent"><h3>2 · At least one acceptance criterion you could write as a test</h3>
+      <p>If you cannot imagine the test, neither can it.</p></div>
+    <div class="card accent"><h3>3 · You can tell what should look different on screen</h3>
+      <p>Even if the answer is "nothing" — say so.</p></div>
+    <div class="card accent"><h3>4 · It does not break a hard rule</h3>
+      <p>No real data. No dependencies. Never commit to <code>main</code>.</p></div>
+  </div>
+  <p class="caption" style="max-width:none;font-size:.95rem">Every time someone says "clearer",
+    ask: <em>how would a test check that?</em> — That question is the whole session in seven
+    words.</p>
+</section>
+
+<!-- 24 ------------------------------------------------------------------ -->
+<section class="slide" data-title="Close">
+  <h2 style="font-size:2.2rem;max-width:24ch">The skill that mattered was not engineering.</h2>
+  <p style="font-size:1.3rem;max-width:38ch">It was writing down precisely what we wanted —
+    which is a thing this organisation already does, in every ticket, every day.</p>
+  <p style="font-size:1.3rem;max-width:38ch"><strong>The difference is that now the vagueness
+    costs you immediately and visibly, instead of six weeks later.</strong></p>
+  <p class="caption">The repository is public, including a write-up of everything we got wrong.
+    Read that one first.</p>
+</section>
+
+</main>
+
+<script>
+  // No framework, no build step (NFR-2). The whole deck is this file.
+  const slides = [...document.querySelectorAll('.slide')];
+  const bar = document.getElementById('bar');
+  const badge = document.getElementById('badge');
+  const overview = document.getElementById('overview');
+  const list = document.getElementById('overview-list');
+  let i = 0;
+
+  slides.forEach((s, n) => {
+    const li = document.createElement('li');
+    li.textContent = s.dataset.title;
+    // stopPropagation matters: without it the window-level click handler below fires next,
+    // sees the overview already closed, and advances a slide you did not ask for.
+    li.addEventListener('click', e => { e.stopPropagation(); closeOverview(); go(n); });
+    list.append(li);
+  });
+
+  function go(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach((s, k) => k === i ? s.setAttribute('data-current', '') : s.removeAttribute('data-current'));
+    [...list.children].forEach((li, k) => k === i ? li.setAttribute('data-current', '') : li.removeAttribute('data-current'));
+    bar.style.width = ((i + 1) / slides.length * 100) + '%';
+    badge.textContent = (i + 1) + ' / ' + slides.length;
+    // The hash means a reload does not lose your place, and a link can point at one slide.
+    if (location.hash !== '#' + (i + 1)) history.replaceState(null, '', '#' + (i + 1));
+    slides[i].scrollTop = 0;
+  }
+
+  function closeOverview() { overview.removeAttribute('data-open'); overview.hidden = true; }
+  function toggleOverview() {
+    if (overview.hasAttribute('data-open')) return closeOverview();
+    overview.hidden = false; overview.setAttribute('data-open', '');
+  }
+
+  addEventListener('keydown', e => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    switch (e.key) {
+      case 'ArrowRight': case 'ArrowDown': case 'PageDown': case ' ': go(i + 1); break;
+      case 'ArrowLeft':  case 'ArrowUp':   case 'PageUp':          go(i - 1); break;
+      case 'Home': go(0); break;
+      case 'End':  go(slides.length - 1); break;
+      case 'o': case 'O': toggleOverview(); return;
+      case 'f': case 'F':
+        document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+        return;
+      case 'Escape': closeOverview(); return;
+      default: return;
+    }
+    e.preventDefault();
+    closeOverview();
+  });
+
+  // Tap/click the right two-thirds to advance, the left third to go back. Useful from a phone
+  // or a trackpad when there is no clicker; ignores clicks on links and the overview.
+  addEventListener('click', e => {
+    if (overview.hasAttribute('data-open') || e.target.closest('a')) return;
+    go(e.clientX < innerWidth / 3 ? i - 1 : i + 1);
+  });
+
+  go((parseInt(location.hash.slice(1), 10) || 1) - 1);
+</script>
