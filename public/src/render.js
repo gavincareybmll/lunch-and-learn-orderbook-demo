@@ -350,14 +350,19 @@ export function topOfBook(touch) {
   const bid = priceOf(touch?.bid);
   const ask = priceOf(touch?.ask);
   const twoSided = bid !== null && ask !== null;
+  const spread = twoSided ? ask - bid : null;
+  const mid = twoSided ? (bid + ask) / 2 : null;
 
   return {
     bid,
     ask,
-    // Absolute, in the same units as the prices either side of it. Basis points are held
-    // back by PRD section 8.
-    spread: twoSided ? ask - bid : null,
-    mid: twoSided ? (bid + ask) / 2 : null,
+    // Absolute, in the same units as the prices either side of it.
+    spread,
+    mid,
+    // The same spread again, sized against the mid rather than the currency, so it can be
+    // judged without doing arithmetic (LLD-53). Needs a mid to be a fraction of, same as spread
+    // needs both sides.
+    spreadBps: mid ? (spread / mid) * 10000 : null,
   };
 }
 
@@ -368,18 +373,29 @@ export const NO_ASKS = 'No sellers waiting';
 export const NO_MID = 'No mid price while one side is empty';
 // Reads after the word "Spread", which is where it appears.
 export const NO_SPREAD = 'unavailable while one side is empty';
+// The bps figure has no preceding word of its own, so it says fully what is missing.
+export const NO_SPREAD_BPS = 'Spread in basis points unavailable while one side is empty';
 
-const READOUT_FIELDS = ['bid', 'ask', 'mid', 'spread'];
+const READOUT_FIELDS = ['bid', 'ask', 'mid', 'spread', 'spreadBps'];
 
-// The four numbers of the readout as the strings that go on the page.
+// One decimal place: enough to tell 199.9 from 200.0, and no more precision than the mid it is
+// a fraction of actually carries.
+export function formatBps(value) {
+  return Number.isFinite(value) ? value.toFixed(1) : '-';
+}
+
+// The five numbers of the readout as the strings that go on the page.
 export function formatReadout(model) {
-  const { bid = null, ask = null, mid = null, spread = null } = model ?? {};
+  const { bid = null, ask = null, mid = null, spread = null, spreadBps = null } = model ?? {};
 
   return {
     bid: bid === null ? NO_BIDS : formatPrice(bid),
     ask: ask === null ? NO_ASKS : formatPrice(ask),
     mid: mid === null ? NO_MID : formatPrice(mid),
     spread: spread === null ? NO_SPREAD : formatPrice(spread),
+    // Labelled in the figure itself, since unlike spread it sits beside no static word of its
+    // own in the markup (LLD-53).
+    spreadBps: spreadBps === null ? NO_SPREAD_BPS : `${formatBps(spreadBps)} bps`,
   };
 }
 

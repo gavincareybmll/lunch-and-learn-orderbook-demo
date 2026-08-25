@@ -147,6 +147,11 @@
   }
   .quote-note { margin: .1rem 0 0; color: var(--muted); font-size: clamp(.78rem, 1.05vw, .95rem); }
   .quote-note .quote-figure { font-family: var(--mono); font-weight: 600; color: var(--ink); }
+  /* A second, smaller figure beside the absolute spread (LLD-53): the same gap, sized against
+     the mid instead of the currency. It reads quieter than the spread it sits next to, so it
+     stays the second thing read here and nowhere near competing with the mid price itself. */
+  .quote-bps { margin-left: .5rem; font-size: .88em; }
+  .quote-bps .quote-figure { font-weight: 500; color: var(--muted); }
 
   /* An absent price is a sentence where a number would be, and cannot be set at the size of
      one. Every slot says so the same way, so nothing on the readout is ever a dash or a
@@ -307,7 +312,7 @@
     <div class="quote mid">
       <p class="quote-label">Mid price</p>
       <p class="quote-price" data-readout="mid">-</p>
-      <p class="quote-note">Spread <span class="quote-figure" data-readout="spread">-</span></p>
+      <p class="quote-note">Spread <span class="quote-figure" data-readout="spread">-</span><span class="quote-bps"><span class="quote-figure" data-readout="spreadBps">-</span></span></p>
     </div>
     <div class="quote ask">
       <p class="quote-label">Best ask - least anyone will sell for</p>
