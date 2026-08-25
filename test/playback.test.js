@@ -31,25 +31,24 @@ import {
   setPaused,
   togglePaused,
   ladderDepth,
+  midSeries,
   touchQueues,
   touchLevels,
   tradeTape,
 } from '../public/src/app.js';
-import * as app from '../public/src/app.js';
 import { playbackControl, topOfBook, PAUSE_LABEL, RESUME_LABEL } from '../public/src/render.js';
 
 const INDEX = readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
 
-// Everything the loop puts on screen, as one string: the ladder, the queue view, the readout
-// and the tape. The chart is fed from the same event application (REQ-11, LLD-10) and is
-// included here as soon as app.js exposes its series.
+// Everything the loop puts on screen, as one string: the ladder, the queue view, the readout,
+// the tape and the chart, the last of which is fed from the same event application (REQ-11).
 function display(state) {
   return JSON.stringify({
     ladder: ladderDepth(state),
     queues: touchQueues(state),
     readout: topOfBook(touchLevels(state)),
     tape: tradeTape(state),
-    chart: typeof app.midSeries === 'function' ? app.midSeries(state) : null,
+    chart: midSeries(state),
   });
 }
 
@@ -150,13 +149,11 @@ test('Given the simulation is paused, when the display is inspected, then the la
   assert.ok(tape.length > 0, 'the tape still has trades on it');
   assert.ok(Number.isFinite(readout.mid), 'the readout still has a mid price');
 
-  // The chart is fed by the same event application, so it holds too (REQ-11, LLD-10).
-  if (typeof app.midSeries === 'function') {
-    const series = app.midSeries(state);
-    assert.ok(series.length > 0, 'the chart still has a line on it');
-    for (let i = 0; i < 120; i += 1) advance(state, FRAME_MS);
-    assert.deepEqual(app.midSeries(state), series);
-  }
+  // The chart is fed by the same event application, so it holds too (REQ-11).
+  const series = midSeries(state);
+  assert.ok(series.length > 0, 'the chart still has a line on it');
+  for (let i = 0; i < 120; i += 1) advance(state, FRAME_MS);
+  assert.deepEqual(midSeries(state), series);
 });
 
 test('Given the control, when it is inspected, then it says what it will do next in words - Pause while running, Resume while paused', () => {
