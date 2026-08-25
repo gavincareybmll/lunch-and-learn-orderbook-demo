@@ -61,6 +61,19 @@ fi
 If the branch already has a tests commit, do not write the tests again — pick up from where it
 stopped.
 
+**If the branch is behind `main`, rebase it before doing anything else.** A branch that was green
+in isolation can conflict with what has shipped since — that is the usual reason a ticket comes
+back here after being held out of a release:
+
+```
+git rebase origin/main
+```
+
+Resolve any conflicts in favour of keeping *both* changes working — the other side has already
+shipped, so it is not yours to undo. Then re-run `node --test`, confirm the whole suite is green,
+and force-push the rebased branch (`git push --force-with-lease`). Say in your report what
+conflicted and how you resolved it.
+
 ### Tests first — this ordering is not optional
 
 You are about to write both the tests and the code. If you write the code first, your tests will
