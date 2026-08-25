@@ -14,6 +14,9 @@ Scaffolding only. The specification has not been written yet, and no application
 Once `public/prd.html` is agreed, the application will be built from it — by the agent, one
 ticket at a time. The structure of the code will follow from the specification, not precede it.
 
+**How the factory itself works — and how to adapt it for your own project — is in
+[`FACTORY.md`](FACTORY.md).**
+
 ## How it gets built
 
 The scaffolding in this repository — the workflows, the agent prompts, the Jira toolkit — is
