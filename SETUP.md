@@ -243,6 +243,54 @@ Then write a small, precisely-specified ticket and watch it produce a PR.
 
 ---
 
+## Rehearsing, and resetting between runs
+
+Three scripts, run from the repository root. They need `gh` authenticated and the Jira/Netlify
+tokens present (this repo expects them in `~/.config/factory/`, or in the environment).
+
+```bash
+./scripts/set-baseline.sh          # record the state to return to. Run when that state changes
+./scripts/seed-demo-tickets.sh     # create the session's tickets, all in Idea. Free, triggers nothing
+./scripts/reset-demo.sh            # DRY RUN — shows exactly what it would do, changes nothing
+./scripts/reset-demo.sh --yes      # do it, with confirmations
+```
+
+**The rehearsal loop:** seed → run the session → `reset-demo.sh --yes` → repeat. Resetting is free
+and takes seconds, so rehearse as often as you like.
+
+### What reset does, and what it deliberately does not
+
+| Surface | Action |
+|---|---|
+| `main` | Hard-reset to the `demo-baseline` tag and force-pushed |
+| Branches and PRs | `feat/*` branches deleted, open PRs closed |
+| Jira | **Everything not labelled `baseline` is deleted**, then the demo tickets re-seeded |
+| Deployment | The baseline deploy is **restored**, not rebuilt — free and instant |
+
+The Jira rule is an **allowlist on purpose**. Deleting tickets that carry a "demo" label would
+require everyone to label correctly when they create one, and an audience member will not. The set
+worth protecting is small, known and static; the set to discard is unbounded.
+
+It asks for confirmation before destroying anything, and refuses outright if nothing is labelled
+`baseline` — a mistyped label would otherwise delete a board that cannot be recovered.
+
+> **Two traps, both learned the hard way.**
+>
+> **Commit before you reset.** It hard-resets the working tree, so uncommitted work is destroyed —
+> including edits to the reset script itself, which is exactly how we found out. It now warns and
+> asks, but the habit is: commit, then reset.
+>
+> **Jira's search index lags the API by several seconds.** Label a ticket and immediately search
+> for it and it will not be there. Automation that labels-then-queries gets a stale answer; here
+> that would have meant deleting tickets it meant to keep.
+
+### Keeping the baseline current
+
+`set-baseline.sh` records two things: the git commit (as the `demo-baseline` tag) and which
+deployment is live. Run it whenever the state you want to return to changes — otherwise reset
+quietly rolls back work you meant to keep. It warns when `main` is ahead of the baseline and makes
+you confirm, but the fix is to re-run `set-baseline.sh` rather than confirm.
+
 ## When it breaks
 
 | Symptom | Cause |

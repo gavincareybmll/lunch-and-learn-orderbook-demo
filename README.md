@@ -35,6 +35,16 @@ Jira "Ready for Engineering"
   → Jira "Ready for Deployment" → agent merges → live
 ```
 
+## Rehearsing and resetting
+
+```bash
+./scripts/reset-demo.sh            # dry run: shows what it would change
+./scripts/reset-demo.sh --yes      # reset git, Jira and the deployment to the baseline
+```
+
+See [`SETUP.md`](SETUP.md) for the full rehearsal loop. **Commit before resetting** — it
+hard-resets the working tree.
+
 ## Running locally
 
 No dependencies and no build step, by design. Node 20+ for the tests.
@@ -56,7 +66,11 @@ python3 -m http.server -d public 8000
 | `public/slides/` | Presentation material (hand-written, not factory-built) |
 | `test/` | Unit tests, run with `node --test` |
 | `.factory/` | Agent prompts — read at runtime, so they can be iterated without touching a workflow |
-| `scripts/` | Jira toolkit, run telemetry, demo reset tooling |
+| `scripts/jira.sh` | Read, comment (with real @mentions), transition, search, label |
+| `scripts/reset-demo.sh` | Reset git, Jira and the deployment to the baseline |
+| `scripts/set-baseline.sh` | Record the state reset returns to |
+| `scripts/seed-demo-tickets.sh` | Create the session's tickets |
+| `scripts/run-telemetry.sh` | Post model, time, tokens and cost back to the ticket |
 | `FACTORY.md` | How the factory works and why |
 | `SETUP.md` | Step-by-step guide to standing up your own |
 
