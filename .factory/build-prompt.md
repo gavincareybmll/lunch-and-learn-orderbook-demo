@@ -42,8 +42,24 @@ Then **stop**. Declining is a successful outcome, not a failure.
 
 ```
 ./scripts/jira.sh transition {{ISSUE_KEY}} "In Progress"
-git checkout -b feat/{{ISSUE_KEY}}
 ```
+
+Then get onto the branch. **A previous attempt at this ticket may have left one behind** — if it
+exists on the remote, continue from it rather than starting again, and keep any commits already
+on it:
+
+```
+git fetch origin
+if git ls-remote --exit-code --heads origin feat/{{ISSUE_KEY}} >/dev/null 2>&1; then
+  git checkout -B feat/{{ISSUE_KEY}} origin/feat/{{ISSUE_KEY}}
+  git log --oneline main..HEAD          # see what the earlier attempt already did
+else
+  git checkout -b feat/{{ISSUE_KEY}}
+fi
+```
+
+If the branch already has a tests commit, do not write the tests again — pick up from where it
+stopped.
 
 ### Tests first — this ordering is not optional
 

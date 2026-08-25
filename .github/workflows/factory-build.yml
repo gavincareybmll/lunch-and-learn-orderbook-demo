@@ -102,9 +102,12 @@ jobs:
           # Claude Code default is at the time — which can change between a rehearsal
           # and the live session, silently altering behaviour and run time. Pin it,
           # rehearse against it, demo on it.
+          # Turn counts climb as the codebase grows -- 21 on the first ticket, 61 on the
+          # eighth, which hit a 60 cap mid-implementation and cost a whole run. Headroom is
+          # far cheaper than a failed run: the agent stops when it is done, not at the cap.
           claude_args: |
             --model claude-opus-5
-            --max-turns 60
+            --max-turns 120
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
 
       # Posts model, wall clock, turns, tokens and cost back to the ticket. The audience's
