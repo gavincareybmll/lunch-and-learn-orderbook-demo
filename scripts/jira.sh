@@ -174,6 +174,22 @@ cmd_comment(){
   echo "commented on $key${mid:+ (mentioning $mid)}"
 }
 
+cmd_search(){
+  local jql="${1:?usage: jira.sh search <JQL>}"
+  local enc; enc=$(JQL="$jql" python3 -c 'import os,urllib.parse; print(urllib.parse.quote(os.environ["JQL"]))')
+  call GET "/search/jql?jql=$enc&maxResults=50&fields=key,summary,status,labels" | python3 -c '
+import json,sys
+issues = json.load(sys.stdin).get("issues") or []
+if not issues:
+    print("(no matching issues)")
+for i in issues:
+    f = i.get("fields") or {}
+    status = (f.get("status") or {}).get("name") or "?"
+    labels = ",".join(f.get("labels") or []) or "-"
+    print("\t".join([i.get("key",""), status, labels, f.get("summary") or ""]))
+'
+}
+
 cmd_label(){
   local key="${1:?usage: jira.sh label <ISSUE-KEY> <label>}" lab="${2:?usage: jira.sh label <ISSUE-KEY> <label>}"
   call PUT "/issue/$key" "{\"update\":{\"labels\":[{\"add\":\"$lab\"}]}}" >/dev/null
@@ -184,6 +200,7 @@ usage(){ cat >&2 <<USG
 usage: jira.sh <command>
 
   get <KEY>                              summary, description, status, comments
+  search <JQL>                           key, status, labels, summary for matching issues
   transitions <KEY>                      statuses reachable from here
   transition <KEY> "<Status Name>"       move the ticket
   comment <KEY> "<text>" [--mention <accountId> [--mention-name "<name>"]]
@@ -193,6 +210,7 @@ exit 2; }
 
 case "${1:-}" in
   get)          shift; cmd_get "$@" ;;
+  search)       shift; cmd_search "$@" ;;
   transitions)  shift; cmd_transitions "$@" ;;
   transition)   shift; cmd_transition "$@" ;;
   comment)      shift; cmd_comment "$@" ;;
