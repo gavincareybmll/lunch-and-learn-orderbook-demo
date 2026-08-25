@@ -25,7 +25,9 @@ say(){ printf '%s\n' "$*"; }
 act(){ if $APPLY; then eval "$1"; else say "    would run: $1"; fi; }
 
 [ -f "$BASELINE_FILE" ] || { say "ERROR: no $BASELINE_FILE — run scripts/set-baseline.sh first"; exit 1; }
-BASE_SHA=$(python3 -c 'import json;print(json.load(open(".factory/demo-baseline.json"))["commit"])')
+git rev-parse -q --verify refs/tags/demo-baseline >/dev/null \
+  || { say "ERROR: no demo-baseline tag — run scripts/set-baseline.sh first"; exit 1; }
+BASE_SHA=$(git rev-parse demo-baseline)
 BASE_DEPLOY=$(python3 -c 'import json;print(json.load(open(".factory/demo-baseline.json"))["netlify_deploy_id"])')
 
 $APPLY || say "=== DRY RUN — nothing will change. Re-run with --yes to apply. ==="
@@ -33,7 +35,7 @@ say
 
 # ---------------------------------------------------------------- git / GitHub
 say "git/GitHub"
-git fetch -q origin --tags
+git fetch -q origin --tags --force
 AHEAD=$(git log --oneline "$BASE_SHA"..origin/main 2>/dev/null | wc -l)
 if [ "$AHEAD" -gt 0 ]; then
   say ""
