@@ -11,6 +11,10 @@ Read the ticket first: `./scripts/jira.sh get {{ISSUE_KEY}}`
 
 - **If it carries the label `release`**, this is a *batch release*. Follow "Release" below and
   ignore the single-ticket steps.
+- **If it carries the label `hold-for-release`**, it has been approved but is waiting to go out
+  with the next release. **Do not deploy it.** Leave it in "Ready for Deployment", comment one
+  short line saying it is approved and queued for the next release, and stop. Approved is not the
+  same as shipped, and this is what lets several tickets go out together.
 - **Otherwise** it is a single ticket. Follow "Single ticket" below.
 
 ---
@@ -85,6 +89,9 @@ any one of them but in their *combination*.
 ```
 ./scripts/jira.sh search 'project=LLD AND status="Ready for Deployment"'
 ```
+
+Every ticket in that list belongs in the release — whether or not it carries `hold-for-release`.
+That label only tells the single-ticket path to leave it alone; it does not exclude it here.
 
 Exclude this release ticket itself. For each remaining ticket, find its open PR:
 
