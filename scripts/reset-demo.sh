@@ -5,7 +5,7 @@
 # get back to a clean baseline without unpicking it by hand.
 #
 #   git/GitHub  main -> the baseline commit; feature branches and open PRs removed
-#   Jira        issues labelled 'live-demo' deleted, then re-seeded from templates
+#   Jira        everything NOT labelled 'baseline' is deleted, then the demo tickets re-seeded
 #   Netlify     the baseline deploy is RESTORED (free and instant), not rebuilt
 #
 # Restoring rather than redeploying matters twice over: a production deploy costs 15 credits on
@@ -17,7 +17,7 @@ cd "$(dirname "$0")/.."
 
 BASELINE_FILE=".factory/demo-baseline.json"
 SITE_ID="${NETLIFY_SITE_ID:-3ad0d238-fea0-4f6e-9078-bc5eb184aeeb}"
-LIVE_DEMO_LABEL="live-demo"
+BASELINE_LABEL="baseline"
 APPLY=false
 [ "${1:-}" = "--yes" ] && APPLY=true
 
@@ -29,6 +29,17 @@ git rev-parse -q --verify refs/tags/demo-baseline >/dev/null \
   || { say "ERROR: no demo-baseline tag — run scripts/set-baseline.sh first"; exit 1; }
 BASE_SHA=$(git rev-parse demo-baseline)
 BASE_DEPLOY=$(python3 -c 'import json;print(json.load(open(".factory/demo-baseline.json"))["netlify_deploy_id"])')
+
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  say "⚠️  You have uncommitted changes. This script hard-resets the working tree and they"
+  say "    WILL be destroyed — including any edit to this script itself."
+  git status --short | sed 's/^/      /'
+  say ""
+  if $APPLY; then
+    printf "    Commit or stash first. Type 'discard' to throw them away: "
+    read -r C; [ "$C" = "discard" ] || { say "    aborted"; exit 1; }
+  fi
+fi
 
 $APPLY || say "=== DRY RUN — nothing will change. Re-run with --yes to apply. ==="
 say
@@ -66,20 +77,48 @@ for B in $(git ls-remote --heads origin 'refs/heads/feat/*' 2>/dev/null | awk '{
 done
 
 # ------------------------------------------------------------------------ Jira
+#
+# Deliberately an ALLOWLIST, not a denylist. Anything labelled 'baseline' survives; everything
+# else is deleted. Deleting things carrying a 'demo' label instead would require every ticket to
+# be labelled correctly at creation, which fails the moment an audience member creates one. The
+# set to protect is small, known and static; the set to discard is unbounded.
 say
 say "Jira"
-KEYS=$(./scripts/jira.sh search "project=LLD AND labels=$LIVE_DEMO_LABEL" 2>/dev/null | awk -F'\t' '/^[A-Z]+-[0-9]+/{print $1}')
-if [ -z "${KEYS// }" ]; then
-  say "  no issues labelled '$LIVE_DEMO_LABEL'"
-else
-  for K in $KEYS; do
-    say "  deleting $K"
-    act "curl -sS -u \"\${JIRA_EMAIL:-gavincarey@bmlltech.com}:\$(tr -d ' \t\n\r' < ~/.config/factory/atlassian_token.txt)\" -X DELETE -o /dev/null \"\${JIRA_BASE_URL:-https://bmlltech.atlassian.net}/rest/api/3/issue/$K\""
-  done
+ALL=$(./scripts/jira.sh search "project=LLD ORDER BY created ASC" 2>/dev/null | awk -F'\t' '/^[A-Z]+-[0-9]+/{print $1"|"$2"|"$3"|"$4}')
+KEEP=""; DROP=""
+while IFS= read -r LINE; do
+  [ -z "$LINE" ] && continue
+  K="${LINE%%|*}"; REST="${LINE#*|}"; STATUS="${REST%%|*}"
+  REST="${REST#*|}"; LABELS="${REST%%|*}"; SUMMARY="${REST#*|}"
+  case ",$LABELS," in
+    *",$BASELINE_LABEL,"*) KEEP="$KEEP $K" ;;
+    *)                     DROP="$DROP $K"; say "  DELETE  $K  [$STATUS]  ${SUMMARY:0:52}" ;;
+  esac
+done <<< "$ALL"
+
+KEEP_N=$(echo $KEEP | wc -w); DROP_N=$(echo $DROP | wc -w)
+say "  keeping $KEEP_N ticket(s) labelled '$BASELINE_LABEL'; deleting $DROP_N"
+
+if [ "$KEEP_N" -eq 0 ]; then
+  say ""
+  say "  ⚠️  NOTHING is labelled '$BASELINE_LABEL'. That would delete the entire board."
+  say "     Refusing. Label the tickets you want to keep first."
+  say "     (Jira's search index lags by a few seconds after labelling — wait, then retry.)"
+  exit 1
 fi
+
+if $APPLY && [ "$DROP_N" -gt 0 ]; then
+  printf "  Delete these %s ticket(s)? Type 'delete' to continue: " "$DROP_N"
+  read -r CONFIRM
+  [ "$CONFIRM" = "delete" ] || { say "  aborted"; exit 1; }
+fi
+
+for K in $DROP; do
+  act "curl -sS -u \"\${JIRA_EMAIL:-gavincarey@bmlltech.com}:\$(tr -d ' \t\n\r' < ~/.config/factory/atlassian_token.txt)\" -X DELETE -o /dev/null \"\${JIRA_BASE_URL:-https://bmlltech.atlassian.net}/rest/api/3/issue/$K\""
+done
+
 say "  re-seeding the demo tickets"
 act "./scripts/seed-demo-tickets.sh"
-say "  (tickets NOT labelled '$LIVE_DEMO_LABEL' are left alone — the Done column is the demo's evidence)"
 
 # --------------------------------------------------------------------- Netlify
 say
