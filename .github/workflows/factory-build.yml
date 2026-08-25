@@ -56,6 +56,10 @@ jobs:
           fi
           echo "issue_key=$KEY" >> "$GITHUB_OUTPUT"
           echo "Building $KEY (triggered by ${{ github.actor }} via ${{ github.event_name }})"
+          # An unset or misnamed FACTORY_MODEL falls back silently, and a fallback run looks
+          # exactly like an intended one. Log what actually resolved, so a comparison between
+          # models can be checked against the log rather than against intent.
+          echo "Model resolved to: ${{ vars.FACTORY_MODEL || 'claude-opus-5' }}"
 
       - name: Install Netlify CLI
         run: npm install -g netlify-cli@latest
@@ -102,11 +106,18 @@ jobs:
           # Claude Code default is at the time — which can change between a rehearsal
           # and the live session, silently altering behaviour and run time. Pin it,
           # rehearse against it, demo on it.
+          #
+          # The pin lives in a repository variable so it can be changed without editing
+          # a workflow — `gh variable set FACTORY_MODEL --body claude-sonnet-5`. Two
+          # reasons that matters: a workflow edit only takes effect once merged to main
+          # (repository_dispatch reads the default branch), and reset-demo.sh rolls main
+          # back to the baseline, which would silently revert an inline model change
+          # mid-rehearsal. The literal below is the fallback if the variable is unset.
           # Turn counts climb as the codebase grows -- 21 on the first ticket, 61 on the
           # eighth, which hit a 60 cap mid-implementation and cost a whole run. Headroom is
           # far cheaper than a failed run: the agent stops when it is done, not at the cap.
           claude_args: |
-            --model claude-opus-5
+            --model ${{ vars.FACTORY_MODEL || 'claude-opus-5' }}
             --max-turns 120
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
 

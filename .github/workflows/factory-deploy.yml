@@ -106,7 +106,7 @@ jobs:
           # an integration branch, a merge and a full test run per ticket, then a deploy and a
           # comment on every ticket in the train. A release hit the old cap of 30 mid-train.
           claude_args: |
-            --model claude-opus-5
+            --model ${{ vars.FACTORY_MODEL || 'claude-opus-5' }}
             --max-turns 80
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
 

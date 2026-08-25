@@ -71,11 +71,15 @@ except Exception:
 
 lines = [f"Run telemetry \u00b7 {phase} phase"]
 
-models = [m for m in (d.get("modelUsage") or {})]
-main = [m for m in models if "haiku" not in m.lower()]
-if main:
-    extra = [m for m in models if m not in main]
-    line = f"Model: {', '.join(main)}"
+# Haiku is normally the sub-task model, so it is filtered out of the headline. But when
+# Haiku IS the configured model, filtering leaves nothing and the comment loses its Model
+# line entirely -- on exactly the runs where the model is the thing being measured. Fall
+# back to reporting every model rather than reporting none.
+models = list(d.get("modelUsage") or {})
+if models:
+    primary = [m for m in models if "haiku" not in m.lower()] or models
+    extra = [m for m in models if m not in primary]
+    line = f"Model: {', '.join(primary)}"
     if extra:
         line += f" (plus {', '.join(extra)} for routine sub-tasks)"
     lines.append(line)
