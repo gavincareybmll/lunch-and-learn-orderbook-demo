@@ -189,6 +189,14 @@
   .tape-row[data-side="ask"] .tape-side { color: var(--ask); }
   .tape-time { color: var(--muted); font-size: .88em; }
 
+  /* The chart is the only panel on the page with a memory: everything above it is the present
+     moment. It gets a band of the height rather than a share of it, so the three panels above
+     keep their room, and it runs the full width because a line is read along its length. */
+  .chart-panel {
+    flex: 0 0 clamp(8.5rem, 20vh, 13rem);
+    min-height: 0;
+  }
+
   /* Side by side needs width. Below that the panels stack and the page is allowed to
      scroll, rather than squeezing them into one screen and being legible as none of them. */
   @media (max-width: 78rem) {
@@ -196,6 +204,7 @@
     .boards { flex-direction: column; }
     .ladder-panel, .queue-panel { flex: 0 0 auto; max-width: none; height: 34rem; }
     .tape-panel { flex: 0 0 auto; height: 26rem; }
+    .chart-panel { flex: 0 0 auto; height: 16rem; }
   }
 
   .legend {
@@ -258,6 +267,11 @@
     </section>
   </main>
 
+  <section class="panel chart-panel">
+    <canvas id="chart" role="img"
+      aria-label="Price chart. The mid price - halfway between the best buy price and the best sell price - over the last minute, drawn as a single line running left to right. The current price is marked at the right-hand end of the line, and the vertical scale covers only the range the price has actually moved through, so small moves are still visible."></canvas>
+  </section>
+
   <ul class="legend">
     <li class="sells"><b>Above the line</b> sellers, cheapest offer nearest the middle</li>
     <li class="buys"><b>Below the line</b> buyers, highest bid nearest the middle</li>
@@ -267,6 +281,7 @@
     <li><b>Mid price</b> halfway between the two best prices; the spread is the gap between them</li>
     <li><b>Trades</b> newest at the top - <b>Buy</b> when a buyer crossed to take an offer, <b>Sell</b> when a seller crossed to hit a bid</li>
     <li><b>Time</b> minutes and seconds since this book opened</li>
+    <li><b>Bottom panel</b> the mid price over the last minute - what all that order flow adds up to</li>
   </ul>
 
   <script type="module" src="./src/app.js"></script>

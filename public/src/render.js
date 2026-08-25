@@ -37,6 +37,9 @@ const THEME = {
   centre: 'rgba(200,218,255,0.8)',
   ask: { text: '#ff9a90', bar: 'rgba(255,107,98,0.30)', edge: '#ff6b62' },
   bid: { text: '#59d69f', bar: 'rgba(46,199,133,0.28)', edge: '#2ec785' },
+  // The mid price is neither side's number - it is the point between the two - so it is drawn
+  // in neither side's colour.
+  price: { line: '#8ab8ff', tag: '#dbe8ff', leader: 'rgba(138,184,255,0.45)' },
 };
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
@@ -433,6 +436,151 @@ export function formatTapeTime(timeMs) {
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
+// --- the price chart (REQ-11) -----------------------------------------------------------
+
+// Points the series keeps. Bounded because the page is left open for the length of a session,
+// and a series that grows without limit is a list the drawing walks in full every frame
+// (NFR-4).
+export const CHART_LIMIT = 300;
+
+// The span of time the width of the plot covers. The series bound and the sampling cadence in
+// app.js are set to agree with this: a window longer than what is remembered would draw as a
+// plot that never finishes filling.
+export const CHART_WINDOW_MS = 60000;
+
+// What the line is, said in words, and why it is worth watching: everything else on the page
+// is the present moment, and this is the only panel with a memory (REQ-13, NFR-3).
+export const CHART_CAPTION = 'The mid price over the last minute - what all that order flow adds up to';
+
+// Prices the vertical scale is labelled with. Enough to read a price off the line, few enough
+// to be read at a glance: this is a chart to look at, not one to measure with.
+const CHART_TICKS = 3;
+
+// Record one mid price, and return the new series trimmed to `limit`. Oldest first, so the
+// last point is the right-hand end of the line and the current price.
+//
+// A side of the book with nothing resting on it leaves no mid price at all, and `mid` is null
+// for it. Nothing is recorded then and the same series is returned, so those periods are a gap
+// in the times rather than a point at zero - which would draw as the price collapsing (REQ-11).
+//
+// The series belongs to the caller: this module holds no state.
+export function recordMid(series, mid, { limit = CHART_LIMIT, timeMs = null } = {}) {
+  const points = Array.isArray(series) ? series : [];
+  if (!Number.isFinite(mid)) return points;
+
+  const bound = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0;
+  if (bound === 0) return [];
+
+  return [...points, { price: mid, timeMs }].slice(-bound);
+}
+
+// The prices the vertical scale is labelled with, highest first: the two ends of the range
+// present and evenly spaced values between them. A range of nothing is one label rather than
+// three copies of the same number.
+export function chartPriceTicks(min, max, count = CHART_TICKS) {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return [];
+  if (max === min) return [min];
+
+  const steps = Math.max(2, Math.floor(count));
+  return Array.from({ length: steps }, (unused, i) => max - ((max - min) * i) / (steps - 1));
+}
+
+// Where the line goes. `series` is the Points recordMid keeps; the result carries each of them
+// with the { x, y } it is drawn at, the range the scale spans, the prices that scale is
+// labelled with, and the rectangle all of it sits in.
+//
+// Two things here are the whole reason this is a pure function. The vertical scale is the range
+// actually present rather than a fixed one, so a move of half a tick is still a visible move -
+// and a book whose mid has not moved has no range at all, which is a division by zero waiting
+// to draw nothing. The horizontal scale is always exactly one window wide, so a second of flow
+// is the same number of pixels whether the window is a third full or completely full: the line
+// extends rightwards until it reaches the edge, and after that the oldest points leave at the
+// left rather than the whole line being squeezed.
+export function chartPlot(series, { width = 0, height = 0, windowMs = CHART_WINDOW_MS } = {}) {
+  const plot = chartArea(width, height);
+  const span = Number.isFinite(windowMs) && windowMs > 0 ? windowMs : CHART_WINDOW_MS;
+
+  const points = (Array.isArray(series) ? series : []).filter(
+    (point) => Number.isFinite(point?.price) && Number.isFinite(point?.timeMs),
+  );
+  const empty = { points: [], min: null, max: null, ticks: [], plot, startMs: null, endMs: null, windowMs: span };
+  if (points.length === 0) return empty;
+
+  const newest = points.at(-1).timeMs;
+  const startMs = Math.max(points[0].timeMs, newest - span);
+  const visible = points.filter((point) => point.timeMs >= startMs);
+
+  const prices = visible.map((point) => point.price);
+  const min = Math.min(...prices);
+  const max = Math.max(...prices);
+  const range = max - min;
+
+  // The ends of the range are the ends of the plot area exactly, rather than a rounding away
+  // from them, because that is what the scale claims. Between them, in proportion.
+  const yOf = (price) => {
+    if (range <= 0) return plot.top + plot.height / 2;
+    if (price === max) return plot.top;
+    if (price === min) return plot.bottom;
+    return plot.top + ((max - price) / range) * plot.height;
+  };
+
+  return {
+    points: visible.map((point) => ({
+      ...point,
+      x: plot.left + ((point.timeMs - startMs) / span) * plot.width,
+      y: yOf(point.price),
+    })),
+    min,
+    max,
+    ticks: chartPriceTicks(min, max).map((price) => ({ price, y: yOf(price) })),
+    plot,
+    startMs,
+    endMs: startMs + span,
+    windowMs: span,
+  };
+}
+
+// How far back the left-hand edge of the plot is, in whichever unit reads more plainly at that
+// length. Empty when there is nothing to say, so the axis is never labelled with a wrong
+// number.
+export function formatChartAge(windowMs) {
+  if (!Number.isFinite(windowMs) || windowMs <= 0) return '';
+
+  const seconds = Math.round(windowMs / 1000);
+  if (seconds < 120) return `${seconds} second${seconds === 1 ? '' : 's'} ago`;
+
+  const minutes = Math.round(seconds / 60);
+  return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+}
+
+// Type sizes for the chart, scaled to the panel so the same layout reads on a laptop and on a
+// projector (NFR-3). Shared by the geometry and the drawing, so the plot area and the labels
+// around it are always computed from the same numbers.
+function chartTypeFor(width, height) {
+  return {
+    caption: Math.max(13, Math.min(20, width * 0.019)),
+    label: Math.max(12, Math.min(18, width * 0.015)),
+    price: Math.max(16, Math.min(32, Math.min(width * 0.028, height * 0.16))),
+  };
+}
+
+// The rectangle the line is drawn in. Room above it for the caption, below it for the time
+// axis, to the left for the prices of the scale, and to the right for the price tag at the end
+// of the line - so nothing the chart says overlaps the thing it is saying it about.
+function chartArea(width, height) {
+  const type = chartTypeFor(width, height);
+  const pad = Math.max(12, Math.min(26, height * 0.07));
+
+  // Estimated from the type size rather than measured, so the geometry stays arithmetic a test
+  // can check rather than something only a browser can answer.
+  const left = pad + type.label * 4.2;
+  const top = pad + type.caption * 1.9;
+  const right = Math.max(left, width - pad - type.price * 4);
+  const bottom = Math.max(top, height - pad - type.label * 1.6);
+
+  return { pad, left, top, right, bottom, width: right - left, height: bottom - top };
+}
+
 // --- drawing ---------------------------------------------------------------------------
 
 // Draw a depth snapshot into a canvas. Reads the data and returns nothing; called once per
@@ -588,6 +736,54 @@ export function drawTape(target, entries) {
   for (const [index, entry] of tape.entries()) fillTapeRow(target.children[index], entry);
 }
 
+// Draw the mid price over the recent window (REQ-11). `series` is the Points recordMid keeps,
+// oldest first, and the window is the span of time the plot's width covers.
+//
+// One line, plotted against time, and nothing else: no second series, no candles, no volume -
+// all held back by PRD section 8. Safe to call with fewer than two points, which draws the
+// plot and says there is nothing on it yet rather than drawing a line through one point.
+export function drawChart(canvas, series, { windowMs = CHART_WINDOW_MS } = {}) {
+  const ctx = canvas.getContext('2d');
+  const { width, height } = fitToDisplay(canvas, ctx);
+  ctx.clearRect(0, 0, width, height);
+  if (width <= 0 || height <= 0) return;
+
+  const type = chartTypeFor(width, height);
+  const model = chartPlot(series, { width, height, windowMs });
+  const { plot } = model;
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.font = `600 ${type.caption}px ${SANS}`;
+  ctx.fillStyle = THEME.text;
+
+  // Set to fit rather than clipped: the caption is the panel's whole explanation, and a
+  // sentence running off the right-hand edge is worse than a slightly smaller one (REQ-13).
+  const room = Math.max(0, width - 2 * plot.pad);
+  const sentence = ctx.measureText(CHART_CAPTION).width;
+  if (sentence > room && sentence > 0) {
+    ctx.font = `600 ${Math.max(10, type.caption * (room / sentence))}px ${SANS}`;
+  }
+  ctx.fillText(CHART_CAPTION, plot.pad, plot.pad + type.caption);
+
+  drawChartScale(ctx, model, type);
+  drawChartAxis(ctx, model, type);
+
+  // One point is a price, not a line. The plot is drawn either way, so the panel is a chart
+  // waiting for prices rather than an empty rectangle.
+  if (model.points.length < 2) {
+    ctx.font = `500 ${Math.round(Math.min(22, width * 0.03))}px ${SANS}`;
+    ctx.fillStyle = THEME.muted;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Waiting for a mid price', (plot.left + plot.right) / 2, (plot.top + plot.bottom) / 2);
+    return;
+  }
+
+  drawChartLine(ctx, model, width);
+  drawChartTag(ctx, model, type, width);
+}
+
 // --- drawing internals ------------------------------------------------------------------
 
 // One row of the tape: which side took, how much, at what price, when. The cells are created
@@ -622,6 +818,87 @@ function fillTapeRow(row, entry) {
   write(time, formatTapeTime(entry?.timeMs));
 }
 
+
+// The vertical scale: a faint rule across the plot at each labelled price, and the price
+// itself outside the plot on the left. Three of them, so a price can be read off the line by
+// eye without the chart becoming a grid to measure against.
+function drawChartScale(ctx, model, type) {
+  const { plot, ticks } = model;
+
+  ctx.strokeStyle = THEME.rule;
+  ctx.lineWidth = 1;
+  // With no prices yet there is no scale to label, so the plot is given its floor to sit on.
+  for (const y of ticks.length > 0 ? ticks.map((tick) => tick.y) : [plot.bottom]) {
+    ctx.beginPath();
+    ctx.moveTo(plot.left, Math.round(y) + 0.5);
+    ctx.lineTo(plot.right, Math.round(y) + 0.5);
+    ctx.stroke();
+  }
+
+  ctx.font = `500 ${type.label}px ${MONO}`;
+  ctx.fillStyle = THEME.muted;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  for (const tick of ticks) {
+    ctx.fillText(formatPrice(tick.price), plot.left - type.label * 0.55, tick.y);
+  }
+}
+
+// The time axis, said in words at either end rather than as a row of timestamps: the left edge
+// is a stated distance into the past and the right edge is now, which is all a reader needs to
+// know that the line runs left to right.
+function drawChartAxis(ctx, model, type) {
+  const { plot } = model;
+  const baseline = plot.bottom + type.label * 1.3;
+
+  ctx.font = `500 ${type.label}px ${SANS}`;
+  ctx.fillStyle = THEME.muted;
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'left';
+  ctx.fillText(formatChartAge(model.windowMs), plot.left, baseline);
+  ctx.textAlign = 'right';
+  ctx.fillText('now', plot.right, baseline);
+}
+
+function drawChartLine(ctx, model, width) {
+  ctx.strokeStyle = THEME.price.line;
+  // Thick enough to be a line from the back of a room rather than a scratch (NFR-3).
+  ctx.lineWidth = Math.max(2.5, Math.min(5, width * 0.004));
+  ctx.lineJoin = 'round';
+  ctx.lineCap = 'round';
+
+  ctx.beginPath();
+  ctx.moveTo(model.points[0].x, model.points[0].y);
+  for (const point of model.points.slice(1)) ctx.lineTo(point.x, point.y);
+  ctx.stroke();
+}
+
+// Where the line has got to, said as a number at the end of it. A viewer glancing up
+// mid-session reads the current price off the tag rather than having to find the right-hand
+// end of the line by eye, and the dot and the leader are what tie the two together.
+function drawChartTag(ctx, model, type, width) {
+  const last = model.points.at(-1);
+
+  ctx.strokeStyle = THEME.price.leader;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath();
+  ctx.moveTo(last.x, Math.round(last.y) + 0.5);
+  ctx.lineTo(width - model.plot.pad, Math.round(last.y) + 0.5);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.fillStyle = THEME.price.line;
+  ctx.beginPath();
+  ctx.arc(last.x, last.y, Math.max(3.5, type.label * 0.34), 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.font = `600 ${type.price}px ${MONO}`;
+  ctx.fillStyle = THEME.price.tag;
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(formatPrice(last.price), width - model.plot.pad, last.y);
+}
 
 // Match the backing store to the element's size in device pixels and work in CSS pixels
 // thereafter, so text stays sharp on a high-density display and the layout arithmetic above
