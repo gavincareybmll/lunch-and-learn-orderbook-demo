@@ -18,6 +18,7 @@ first and the code follows from it, not the other way round.
 The scaffolding — workflows, agent prompts, the Jira toolkit — was written by hand.
 **How it works and why:** [`FACTORY.md`](FACTORY.md).
 **How to build the same thing yourself, step by step:** [`SETUP.md`](SETUP.md).
+**Which model to run it on, measured rather than assumed:** [`MODEL-CHOICE.md`](MODEL-CHOICE.md).
 
 ## How it gets built
 
@@ -72,6 +73,7 @@ python3 -m http.server -d public 8000
 | `scripts/seed-demo-tickets.sh` | Create the session's tickets |
 | `scripts/run-telemetry.sh` | Post model, time, tokens and cost back to the ticket |
 | `FACTORY.md` | How the factory works and why |
+| `MODEL-CHOICE.md` | Opus vs Sonnet vs Haiku on the same tickets, and which to run |
 | `SETUP.md` | Step-by-step guide to standing up your own |
 
 Application source lives under `public/src/`, with the module boundaries fixed by §6 of the PRD
