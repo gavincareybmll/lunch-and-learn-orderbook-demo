@@ -12,12 +12,16 @@
 import { createBook, depth, bestBid, bestAsk, queueAt } from './engine.js';
 import { createSim, step } from './sim.js';
 import {
+  drawChart,
   drawLadder,
   drawQueues,
   drawReadout,
   drawTape,
+  recordMid,
   recordTrades,
   topOfBook,
+  CHART_LIMIT,
+  CHART_WINDOW_MS,
   TAPE_LIMIT,
 } from './render.js';
 
@@ -50,6 +54,14 @@ export const FLOW = {
   // default: it is the module that does the trimming, and one number is harder to disagree
   // with than two.
   tapeEntries: TAPE_LIMIT,
+
+  // The chart, and why these three numbers: 300 points taken every 200ms is exactly the minute
+  // of price the plot covers, so the window fills and then rolls. A bound shorter than the
+  // window would draw as a chart that never finishes filling; a longer one would remember
+  // price nothing ever plots (REQ-11, NFR-4).
+  chartPoints: CHART_LIMIT,
+  chartSampleMs: 200,
+  chartWindowMs: CHART_WINDOW_MS,
 };
 
 export function createSimulation(seed = FLOW.seed) {
@@ -62,24 +74,45 @@ export function createSimulation(seed = FLOW.seed) {
     // rather than from the wall clock, so the same seed prints the same tape (REQ-5).
     events: 0,
     tape: [],
+    // The mid prices the chart plots, and when the next one is due. The warmup fills part of
+    // the window, so the page opens on a line with some history behind it rather than on an
+    // empty plot (REQ-11).
+    series: [],
+    nextSampleMs: 0,
   };
 
   for (let i = 0; i < FLOW.warmupEvents; i += 1) apply(state);
   return state;
 }
 
-// Apply one event and print whatever it traded to the tape. A trade's time is the point in
-// the flow at which it happened, at the rate the flow is paced: the simulation's own clock,
-// which is the only clock there is here (NFR-1).
+// Apply one event, print whatever it traded to the tape, and take the mid for the chart if one
+// is due. Both are stamped with the point in the flow at which they happened, at the rate the
+// flow is paced: the simulation's own clock, which is the only clock there is here (NFR-1).
 function apply(state) {
   const trades = step(state.sim, state.book);
   state.events += 1;
+  const flowMs = (state.events * 1000) / FLOW.eventsPerSecond;
+
+  sampleMid(state, flowMs);
   if (trades.length === 0) return;
 
-  state.tape = recordTrades(state.tape, trades, {
-    limit: FLOW.tapeEntries,
-    timeMs: (state.events * 1000) / FLOW.eventsPerSecond,
-  });
+  state.tape = recordTrades(state.tape, trades, { limit: FLOW.tapeEntries, timeMs: flowMs });
+}
+
+// Take the mid on a fixed cadence rather than on every event, so that a bounded series covers
+// a stated span of time (REQ-11) and the same seed draws the same chart (REQ-5).
+//
+// Sampled on the first event past each boundary, with the next boundary read off the clock
+// rather than counted from this one, so the cadence cannot drift over a long session. A mid
+// that is unavailable - one side of the book empty - records nothing, which is what leaves a
+// gap in the line rather than a price of zero in it.
+function sampleMid(state, flowMs) {
+  if (flowMs < state.nextSampleMs) return;
+  state.nextSampleMs =
+    Math.floor(flowMs / FLOW.chartSampleMs) * FLOW.chartSampleMs + FLOW.chartSampleMs;
+
+  const { mid } = topOfBook(touchLevels(state));
+  state.series = recordMid(state.series, mid, { limit: FLOW.chartPoints, timeMs: flowMs });
 }
 
 // Apply the events that `elapsedMs` of wall time is owed, and report how many were applied.
@@ -130,6 +163,12 @@ export function tradeTape(state) {
   return state.tape ?? [];
 }
 
+// The mid prices recorded so far, oldest first and bounded (REQ-11). The last of them is the
+// right-hand end of the line, and the price the readout is showing.
+export function midSeries(state) {
+  return state.series ?? [];
+}
+
 // --- browser ----------------------------------------------------------------------------
 
 function start() {
@@ -137,6 +176,7 @@ function start() {
   const queues = document.getElementById('queues');
   const readout = document.getElementById('readout');
   const tape = document.getElementById('tape');
+  const chart = document.getElementById('chart');
   if (!ladder) return;
 
   const state = createSimulation();
@@ -149,6 +189,7 @@ function start() {
     drawLadder(ladder, ladderDepth(state), { maxLevels: FLOW.ladderLevels });
     if (queues) drawQueues(queues, touchQueues(state), { maxSegments: FLOW.queueSegments });
     if (readout) drawReadout(readout, topOfBook(touchLevels(state)));
+    if (chart) drawChart(chart, midSeries(state), { windowMs: FLOW.chartWindowMs });
 
     // The tape only changes when something traded, and recordTrades returns the same list
     // when nothing did - so identity is enough to skip rewriting the rows on the frames in
