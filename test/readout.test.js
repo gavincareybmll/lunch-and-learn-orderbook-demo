@@ -107,11 +107,39 @@ test('Given a populated book, when the readout is read from it, then it reports 
 });
 
 test('Given the spread, when it is shown, then it is an absolute number of price rather than a ratio or a percentage', () => {
-  // Held back by PRD section 8: basis points are deliberately not part of version 1.0.
   const text = formatReadout(topOfBook({ bid: level(99.5), ask: level(100.5) }));
 
   assert.equal(text.spread, '1.00');
   assert.ok(!text.spread.includes('%'), 'the spread is not a percentage');
+});
+
+// --- basis points spread (LLD-37) -------------------------------------------------------
+
+test('Given a best bid of 99 and a best ask of 101, when the spread in basis points is computed, then it is 200.0', () => {
+  const model = topOfBook({ bid: level(99), ask: level(101) });
+
+  assert.equal(model.spreadBps, 200.0);
+
+  // ...and that is the number put on the page.
+  const text = formatReadout(model);
+  assert.equal(text.spreadBps, '200.00');
+});
+
+test('Given a book with one side empty, when the spread in basis points is computed, then it is reported as unavailable rather than as a number', () => {
+  const noAsks = topOfBook({ bid: level(99), ask: null });
+  assert.equal(noAsks.spreadBps, null);
+
+  const noBids = topOfBook({ bid: null, ask: level(101) });
+  assert.equal(noBids.spreadBps, null);
+
+  const empty = topOfBook({ bid: null, ask: null });
+  assert.equal(empty.spreadBps, null);
+
+  // Unavailable is not zero, and it is not a dash: the readout says so (NFR-3).
+  for (const model of [noAsks, noBids, empty]) {
+    const text = formatReadout(model);
+    assertSaysSoInWords(text.spreadBps, 'the spread in basis points');
+  }
 });
 
 // --- wiring: the readout is fed from the running book ------------------------------------
