@@ -9,9 +9,9 @@
 // The browser loop starts only when there is a document to draw into, so that importing this
 // module under the test runner needs no DOM (NFR-2).
 
-import { createBook, depth } from './engine.js';
+import { createBook, depth, bestBid, bestAsk, queueAt } from './engine.js';
 import { createSim, step } from './sim.js';
-import { drawLadder } from './render.js';
+import { drawLadder, drawQueues } from './render.js';
 
 export const FLOW = {
   seed: 20260824,
@@ -32,6 +32,11 @@ export const FLOW = {
   // Deep enough to show the shape of the book, few enough that each row is a readable band
   // of the screen rather than a line in a spreadsheet (NFR-3).
   ladderLevels: 7,
+
+  // Blocks reserved per side in the queue view. The touch routinely holds more orders than
+  // this, which is the point: the queue is deeper than the screen and the view says so
+  // rather than pretending the tail is not there.
+  queueSlots: 6,
 };
 
 export function createSimulation(seed = FLOW.seed) {
@@ -63,11 +68,27 @@ export function ladderDepth(state) {
   return depth(state.book, FLOW.ladderLevels);
 }
 
+// The individual orders resting at the best bid and the best ask, in queue order (REQ-8).
+// A side with nothing on it has no best price to read a queue at, and reads as an empty
+// queue rather than as an error.
+export function touchQueues(state) {
+  const side = (best, name) => {
+    const price = best ? best.price : null;
+    return { price, orders: price === null ? [] : queueAt(state.book, name, price) };
+  };
+
+  return {
+    bid: side(bestBid(state.book), 'bid'),
+    ask: side(bestAsk(state.book), 'ask'),
+  };
+}
+
 // --- browser ----------------------------------------------------------------------------
 
 function start() {
-  const canvas = document.getElementById('ladder');
-  if (!canvas) return;
+  const ladder = document.getElementById('ladder');
+  const queues = document.getElementById('queues');
+  if (!ladder) return;
 
   const state = createSimulation();
   let previous = null;
@@ -75,7 +96,8 @@ function start() {
   const frame = (now) => {
     advance(state, previous === null ? 0 : now - previous);
     previous = now;
-    drawLadder(canvas, ladderDepth(state), { maxLevels: FLOW.ladderLevels });
+    drawLadder(ladder, ladderDepth(state), { maxLevels: FLOW.ladderLevels });
+    if (queues) drawQueues(queues, touchQueues(state), { maxSlots: FLOW.queueSlots });
     requestAnimationFrame(frame);
   };
 

@@ -50,17 +50,35 @@
   }
   .standfirst strong { color: var(--ink); font-weight: 600; }
 
-  /* The ladder takes whatever height is left; min-height:0 lets it shrink inside the flex
-     column so the canvas can be measured rather than overflowing the viewport. */
-  .ladder-panel {
+  /* The two panels take whatever height is left; min-height:0 lets them shrink inside the
+     flex column so each canvas can be measured rather than overflowing the viewport. */
+  .boards {
     flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    gap: 1rem;
+  }
+  .panel {
     min-height: 14rem;
+    min-width: 0;
     background: var(--panel);
     border: 1px solid var(--rule);
     border-radius: 12px;
     overflow: hidden;
   }
-  #ladder { display: block; width: 100%; height: 100%; }
+  /* The ladder is the wider of the two: it carries four columns to the queue view's three.
+     The queue view keeps enough width for a block to be a block rather than a line. */
+  .ladder-panel { flex: 1 1 56%; }
+  .queue-panel { flex: 1 1 44%; max-width: 34rem; }
+  .panel canvas { display: block; width: 100%; height: 100%; }
+
+  /* Side by side needs width. Below that the panels stack and the page is allowed to
+     scroll, rather than squeezing both into one screen and being legible as neither. */
+  @media (max-width: 66rem) {
+    body { height: auto; min-height: 100vh; }
+    .boards { flex-direction: column; }
+    .ladder-panel, .queue-panel { flex: 0 0 auto; max-width: none; height: 34rem; }
+  }
 
   .legend {
     flex: none;
@@ -88,16 +106,23 @@
       trade, continuously. Everything you see is invented in your browser - no real market data.</p>
   </header>
 
-  <main class="ladder-panel">
-    <canvas id="ladder" role="img"
-      aria-label="Depth ladder. Sell orders above, buy orders below, with the best prices of each meeting in the middle. Each row shows a price, the total volume resting there and how many separate orders make it up."></canvas>
+  <main class="boards">
+    <section class="panel ladder-panel">
+      <canvas id="ladder" role="img"
+        aria-label="Depth ladder. Sell orders above, buy orders below, with the best prices of each meeting in the middle. Each row shows a price, the total volume resting there and how many separate orders make it up."></canvas>
+    </section>
+    <section class="panel queue-panel">
+      <canvas id="queues" role="img"
+        aria-label="The queue at the best prices. Each block is one individual order waiting its turn, labelled with its position in line and its size. Sellers above the middle line, buyers below, and on each side the block nearest the line is the next one to trade."></canvas>
+    </section>
   </main>
 
   <ul class="legend">
     <li class="sells"><b>Above the line</b> sellers, cheapest offer nearest the middle</li>
     <li class="buys"><b>Below the line</b> buyers, highest bid nearest the middle</li>
-    <li><b>Each row</b> one price: the volume resting there, and how many orders that is</li>
-    <li><b>Each bar</b> that level's size against the biggest one on screen</li>
+    <li><b>Left panel</b> one row per price: the volume resting there, and how many orders that is</li>
+    <li><b>Right panel</b> those orders one by one, in the order they will trade</li>
+    <li><b>First in line</b> drawn solid, and it is the next order to trade at that price</li>
   </ul>
 
   <script type="module" src="./src/app.js"></script>
