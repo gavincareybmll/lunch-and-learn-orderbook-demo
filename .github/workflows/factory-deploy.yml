@@ -102,9 +102,12 @@ jobs:
           # Claude Code default is at the time — which can change between a rehearsal
           # and the live session, silently altering behaviour and run time. Pin it,
           # rehearse against it, demo on it.
+          # A single-ticket deploy takes ~16 turns, but a batch release does far more work:
+          # an integration branch, a merge and a full test run per ticket, then a deploy and a
+          # comment on every ticket in the train. A release hit the old cap of 30 mid-train.
           claude_args: |
             --model claude-opus-5
-            --max-turns 30
+            --max-turns 80
             --allowedTools "Bash,Read,Write,Edit,Glob,Grep"
 
       # Posts model, wall clock, turns, tokens and cost back to the ticket. The audience's
