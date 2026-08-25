@@ -107,11 +107,47 @@ test('Given a populated book, when the readout is read from it, then it reports 
 });
 
 test('Given the spread, when it is shown, then it is an absolute number of price rather than a ratio or a percentage', () => {
-  // Held back by PRD section 8: basis points are deliberately not part of version 1.0.
   const text = formatReadout(topOfBook({ bid: level(99.5), ask: level(100.5) }));
 
   assert.equal(text.spread, '1.00');
   assert.ok(!text.spread.includes('%'), 'the spread is not a percentage');
+});
+
+// --- LLD-53: the spread in basis points, promoted out of PRD section 8 headroom -----------
+
+test('Given a best bid of 99 and a best ask of 101, when the spread in basis points is computed, then it is 200.0 - the quoted spread of 2, divided by the mid of 100, times 10000', () => {
+  const model = topOfBook({ bid: level(99), ask: level(101) });
+
+  assert.equal(model.spread, 2);
+  assert.equal(model.mid, 100);
+  assert.equal(model.spreadBps, 200);
+
+  const text = formatReadout(model);
+  assert.match(text.spreadBps, /200\.0/, 'the bps figure is shown to one decimal place');
+});
+
+test('Given a book with one side empty, when the spread in basis points is computed, then it is reported as unavailable rather than as a number', () => {
+  const noAsks = topOfBook({ bid: level(99), ask: null });
+  assert.equal(noAsks.spreadBps, null);
+
+  const noBids = topOfBook({ bid: null, ask: level(101) });
+  assert.equal(noBids.spreadBps, null);
+
+  const empty = topOfBook({ bid: null, ask: null });
+  assert.equal(empty.spreadBps, null);
+
+  for (const model of [noAsks, noBids, empty]) {
+    assertSaysSoInWords(formatReadout(model).spreadBps, 'the spread in basis points');
+  }
+});
+
+test('Given the readout, when it is viewed, then the basis points figure appears beside the absolute spread and is labelled bps', () => {
+  const model = topOfBook({ bid: level(99), ask: level(101) });
+  const text = formatReadout(model);
+
+  assert.ok('spreadBps' in text, 'the readout carries a bps figure alongside the absolute spread');
+  assert.notEqual(text.spreadBps, text.spread, 'the bps figure is a distinct figure from the absolute spread');
+  assert.match(text.spreadBps, /bps/, 'the figure is labelled bps');
 });
 
 // --- wiring: the readout is fed from the running book ------------------------------------
