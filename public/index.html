@@ -50,8 +50,60 @@
   }
   .standfirst strong { color: var(--ink); font-weight: 600; }
 
-  /* The two panels take whatever height is left; min-height:0 lets them shrink inside the
-     flex column so each canvas can be measured rather than overflowing the viewport. */
+  /* The readout: what the price is, right now. The mid is the largest number on the page by
+     a long way, so it is the first thing an eye lands on (REQ-13); the two prices it sits
+     between are the ones it is the middle of, in the same colours the ladder gives those
+     sides. */
+  .readout {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: .5rem clamp(1.25rem, 5vw, 4rem);
+    padding: .6rem clamp(1rem, 3vw, 2rem) .8rem;
+    background: var(--panel);
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+  }
+  .quote { text-align: center; min-width: 0; }
+  .quote-label {
+    margin: 0;
+    color: var(--muted);
+    font-size: clamp(.7rem, .95vw, .84rem);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .quote-price {
+    margin: 0;
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: clamp(1.5rem, 3.2vw, 2.4rem);
+    line-height: 1.15;
+  }
+  .quote.bid .quote-price { color: var(--bid); }
+  .quote.ask .quote-price { color: var(--ask); }
+  .quote.mid .quote-price {
+    font-size: clamp(2.9rem, 7.5vw, 5.5rem);
+    letter-spacing: -.025em;
+  }
+  .quote-note { margin: .1rem 0 0; color: var(--muted); font-size: clamp(.78rem, 1.05vw, .95rem); }
+  .quote-note .quote-figure { font-family: var(--mono); font-weight: 600; color: var(--ink); }
+
+  /* An absent price is a sentence where a number would be, and cannot be set at the size of
+     one. Every slot says so the same way, so nothing on the readout is ever a dash or a
+     zero standing in for a price that does not exist. */
+  .readout [data-available="false"] {
+    font-family: var(--sans);
+    font-weight: 500;
+    font-size: clamp(.95rem, 1.5vw, 1.15rem);
+    letter-spacing: 0;
+    color: var(--muted);
+  }
+
+  /* The two canvas panels and the tape take whatever height is left; min-height:0 lets them
+     shrink inside the flex column so each canvas can be measured rather than overflowing the
+     viewport. */
   .boards {
     flex: 1 1 auto;
     min-height: 0;
@@ -69,16 +121,81 @@
   /* The ladder is the wider of the two: it carries four columns of numbers. The queue view
      needs width of a different kind - its bars are read along their length, and a bar too
      narrow is a bar whose joins cannot be counted. */
-  .ladder-panel { flex: 1 1 54%; }
-  .queue-panel { flex: 1 1 46%; max-width: 38rem; }
+  .ladder-panel { flex: 1 1 44%; }
+  .queue-panel { flex: 1 1 36%; max-width: 34rem; }
   .panel canvas { display: block; width: 100%; height: 100%; }
 
+  /* The tape is the narrowest of the three: four short columns, and nothing gained by making
+     them wider. It is text rather than canvas, because it is a list of numbers to be read
+     rather than a shape to be seen. */
+  .tape-panel {
+    flex: 0 0 clamp(15rem, 22%, 20rem);
+    display: flex;
+    flex-direction: column;
+    padding: .9rem 0 0;
+  }
+  .tape-caption {
+    flex: none;
+    margin: 0 1rem .55rem;
+    color: var(--ink);
+    font-size: clamp(.86rem, 1.15vw, 1rem);
+    font-weight: 600;
+  }
+  .tape-row, .tape-head {
+    display: grid;
+    grid-template-columns: 3.1rem 1fr 1fr 2.6rem;
+    align-items: baseline;
+    gap: .4rem;
+    padding: .18rem 1rem;
+  }
+  .tape-head {
+    margin: 0;
+    padding-bottom: .3rem;
+    border-bottom: 1px solid var(--rule);
+    color: var(--muted);
+    font-size: clamp(.66rem, .9vw, .76rem);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+  }
+  .tape-head span:nth-child(n+2), .tape-row span:nth-child(n+2) { text-align: right; }
+
+  /* Bounded to a few dozen entries, so the list cannot grow without limit (NFR-4); clipped
+     to the panel, so the oldest of those visibly fall off the bottom as new ones arrive. The
+     fade is what makes that read as falling off rather than as a row cut in half. */
+  .tape {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    -webkit-mask-image: linear-gradient(to bottom, #000 72%, transparent 98%);
+    mask-image: linear-gradient(to bottom, #000 72%, transparent 98%);
+    margin: 0;
+    padding: .25rem 0 0;
+    list-style: none;
+    font-family: var(--mono);
+    font-size: clamp(.9rem, 1.25vw, 1.08rem);
+    font-variant-numeric: tabular-nums;
+  }
+  .tape-side {
+    font-family: var(--sans);
+    font-weight: 600;
+    letter-spacing: .01em;
+  }
+  /* The word says which side took, and the colour and the rule agree with it - so the tape
+     is still readable in greyscale and to a colour-blind reader (NFR-3). */
+  .tape-row { border-left: 3px solid transparent; }
+  .tape-row[data-side="bid"] { border-left-color: var(--bid); }
+  .tape-row[data-side="bid"] .tape-side { color: var(--bid); }
+  .tape-row[data-side="ask"] { border-left-color: var(--ask); }
+  .tape-row[data-side="ask"] .tape-side { color: var(--ask); }
+  .tape-time { color: var(--muted); font-size: .88em; }
+
   /* Side by side needs width. Below that the panels stack and the page is allowed to
-     scroll, rather than squeezing both into one screen and being legible as neither. */
-  @media (max-width: 66rem) {
+     scroll, rather than squeezing them into one screen and being legible as none of them. */
+  @media (max-width: 78rem) {
     body { height: auto; min-height: 100vh; }
     .boards { flex-direction: column; }
     .ladder-panel, .queue-panel { flex: 0 0 auto; max-width: none; height: 34rem; }
+    .tape-panel { flex: 0 0 auto; height: 26rem; }
   }
 
   .legend {
@@ -107,6 +224,22 @@
       trade, continuously. Everything you see is invented in your browser - no real market data.</p>
   </header>
 
+  <section class="readout" id="readout" aria-label="Top of book: the best price on each side, the middle of the two, and the gap between them.">
+    <div class="quote bid">
+      <p class="quote-label">Best bid - most anyone will pay</p>
+      <p class="quote-price" data-readout="bid">-</p>
+    </div>
+    <div class="quote mid">
+      <p class="quote-label">Mid price</p>
+      <p class="quote-price" data-readout="mid">-</p>
+      <p class="quote-note">Spread <span class="quote-figure" data-readout="spread">-</span></p>
+    </div>
+    <div class="quote ask">
+      <p class="quote-label">Best ask - least anyone will sell for</p>
+      <p class="quote-price" data-readout="ask">-</p>
+    </div>
+  </section>
+
   <main class="boards">
     <section class="panel ladder-panel">
       <canvas id="ladder" role="img"
@@ -116,6 +249,13 @@
       <canvas id="queues" role="img"
         aria-label="The queue at the best prices. One bar for the best sell price and one for the best buy price, each bar being everything resting at that price, broken into a part for every individual order waiting there and sized in proportion to it. Sellers above the middle line, buyers below, and on each bar the part at the left-hand end is the next order to trade."></canvas>
     </section>
+    <section class="panel tape-panel">
+      <h2 class="tape-caption">Trades, as they happen</h2>
+      <p class="tape-head" aria-hidden="true">
+        <span>Side</span><span>Size</span><span>Price</span><span>Time</span>
+      </p>
+      <ul class="tape" id="tape" aria-label="Trade tape. Every trade as it happens, newest at the top: whether a buyer or a seller crossed the spread to cause it, how much traded, at what price, and how long after the book opened."></ul>
+    </section>
   </main>
 
   <ul class="legend">
@@ -124,6 +264,9 @@
     <li><b>Left panel</b> one row per price: the volume resting there, and how many orders that is</li>
     <li><b>Right panel</b> one of those rows opened up - one bar, split into the orders it is made of</li>
     <li><b>First in line</b> the part at the left-hand end, drawn solid: the next order to trade there</li>
+    <li><b>Mid price</b> halfway between the two best prices; the spread is the gap between them</li>
+    <li><b>Trades</b> newest at the top - <b>Buy</b> when a buyer crossed to take an offer, <b>Sell</b> when a seller crossed to hit a bid</li>
+    <li><b>Time</b> minutes and seconds since this book opened</li>
   </ul>
 
   <script type="module" src="./src/app.js"></script>

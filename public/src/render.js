@@ -1,5 +1,6 @@
-// Drawing the depth ladder (REQ-7) and the queue view at the touch (REQ-8): asks above,
-// bids below, the touch at the centre of both.
+// Drawing the depth ladder (REQ-7), the queue view at the touch (REQ-8), the trade tape
+// (REQ-9) and the top-of-book readout (REQ-10): asks above, bids below, the touch at the
+// centre of both, what the price is, and what just happened.
 //
 // Holds no simulation state and imports nothing. Every function here takes a target and a
 // plain data structure - the { bids, asks } that engine.depth() returns, or the individual
@@ -18,6 +19,9 @@
 // Order is { id, side, price, size, ts }, as the queue view receives it.
 // Segment is { position, id, size, orders, x, width, fraction, combined, leading } - one
 // order's share of the single bar that is its price level.
+//
+// Trade is { price, size, aggressorSide, ... }, as the engine returns it.
+// Entry is { price, size, aggressorSide, timeMs } - one line of the tape, always one trade.
 
 const LADDER_ROWS_PER_SIDE = 8;
 
@@ -329,6 +333,106 @@ export function formatQueueOverflow(hidden, hiddenVolume) {
 // something. It sits under the caption rather than on any single segment, so it is read once.
 const QUEUE_RULE_CAPTION = 'The part at the left-hand end of each bar is the next order to trade';
 
+// --- the top-of-book readout (REQ-10) ---------------------------------------------------
+
+// What the price is, read from the two touch levels. `touch` is { bid, ask } - Levels as
+// bestBid() and bestAsk() return them, or null for a side with nothing resting on it.
+//
+// Mid and spread need both sides. With one side empty there is no mid price at all - not a
+// mid of zero, and not the price of the side that is there - so both are null and the
+// readout says so in words. A number in that position would be an invention.
+export function topOfBook(touch) {
+  const priceOf = (level) => (Number.isFinite(level?.price) ? level.price : null);
+  const bid = priceOf(touch?.bid);
+  const ask = priceOf(touch?.ask);
+  const twoSided = bid !== null && ask !== null;
+
+  return {
+    bid,
+    ask,
+    // Absolute, in the same units as the prices either side of it. Basis points are held
+    // back by PRD section 8.
+    spread: twoSided ? ask - bid : null,
+    mid: twoSided ? (bid + ask) / 2 : null,
+  };
+}
+
+// Said in words, because a dash or a zero in place of a price reads as a price of nothing
+// rather than as an absence (NFR-3).
+export const NO_BIDS = 'No buyers waiting';
+export const NO_ASKS = 'No sellers waiting';
+export const NO_MID = 'No mid price while one side is empty';
+// Reads after the word "Spread", which is where it appears.
+export const NO_SPREAD = 'unavailable while one side is empty';
+
+const READOUT_FIELDS = ['bid', 'ask', 'mid', 'spread'];
+
+// The four numbers of the readout as the strings that go on the page.
+export function formatReadout(model) {
+  const { bid = null, ask = null, mid = null, spread = null } = model ?? {};
+
+  return {
+    bid: bid === null ? NO_BIDS : formatPrice(bid),
+    ask: ask === null ? NO_ASKS : formatPrice(ask),
+    mid: mid === null ? NO_MID : formatPrice(mid),
+    spread: spread === null ? NO_SPREAD : formatPrice(spread),
+  };
+}
+
+// --- the trade tape (REQ-9) -------------------------------------------------------------
+
+// How many trades the tape keeps. Bounded because the page is left open for the length of a
+// session, and an unbounded list is an unbounded amount of DOM (NFR-4). Enough of them that
+// the tape reads as a run of trades rather than as one line flickering.
+export const TAPE_LIMIT = 36;
+
+// Said in words: what this list is, and which end of it is new.
+export const TAPE_CAPTION = 'Every trade as it happens, newest at the top';
+
+// Add the trades of one event to the tape, newest first, and return the new list trimmed to
+// `limit`. The list belongs to the caller - this module holds no state - and a new array is
+// returned only when something was recorded, so a caller can tell by identity whether the
+// tape changed.
+//
+// One line per trade, never a combination of several: an order that fills against three
+// resting orders prints three times, because three separate orders were on the other side of
+// it (REQ-9). The engine returns those in execution order, so the last of them is the newest.
+export function recordTrades(entries, trades, { limit = TAPE_LIMIT, timeMs = null } = {}) {
+  const tape = Array.isArray(entries) ? entries : [];
+  const batch = Array.isArray(trades) ? trades : [];
+  if (batch.length === 0) return tape;
+
+  const bound = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 0;
+  const printed = batch
+    .map((trade) => ({
+      price: Number.isFinite(trade?.price) ? trade.price : null,
+      size: Number.isFinite(trade?.size) ? trade.size : null,
+      aggressorSide: trade?.aggressorSide ?? null,
+      timeMs,
+    }))
+    .reverse();
+
+  return [...printed, ...tape].slice(0, bound);
+}
+
+// Which side crossed the spread to make this trade happen, in the plainest word there is.
+// Said rather than coloured, so the tape is still readable in greyscale (NFR-3).
+export function formatAggressor(side) {
+  if (side === 'bid') return 'Buy';
+  if (side === 'ask') return 'Sell';
+  return '-';
+}
+
+// Minutes and seconds since the book opened. Elapsed rather than a wall clock because the
+// only clock this application has is its own - the flow is generated here, not received
+// (NFR-1) - and written out rather than left to a locale so the same trade reads the same on
+// every machine the demonstration might run on.
+export function formatTapeTime(timeMs) {
+  if (!Number.isFinite(timeMs)) return '-';
+  const total = Math.max(0, Math.floor(timeMs / 1000));
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
 // --- drawing ---------------------------------------------------------------------------
 
 // Draw a depth snapshot into a canvas. Reads the data and returns nothing; called once per
@@ -450,7 +554,74 @@ export function drawQueues(canvas, queues, { maxSegments = QUEUE_MAX_SEGMENTS } 
   }
 }
 
+// Write the top-of-book readout into the page (REQ-10). `target` is the element holding the
+// four slots, each marked with `data-readout`; the markup and its type sizes live in the
+// stylesheet, and this only ever puts text in them.
+//
+// Each slot is also marked available or not, because an absent price is a sentence where a
+// number would be and cannot be set at the size of one. That is a presentational fact about
+// the value, so it is stated here and answered in CSS.
+export function drawReadout(target, model) {
+  if (!target) return;
+  const text = formatReadout(model);
+
+  for (const field of READOUT_FIELDS) {
+    const node = target.querySelector(`[data-readout="${field}"]`);
+    if (!node) continue;
+
+    if (node.textContent !== text[field]) node.textContent = text[field];
+    const available = Number.isFinite(model?.[field]) ? 'true' : 'false';
+    if (node.dataset.available !== available) node.dataset.available = available;
+  }
+}
+
+// Print the tape into a list element (REQ-9). Rows are reused rather than rebuilt: the tape
+// is redrawn every time something trades, which is many times a second, and replacing three
+// dozen elements that often is work the animation loop cannot spare (NFR-4).
+export function drawTape(target, entries) {
+  if (!target) return;
+  const tape = Array.isArray(entries) ? entries : [];
+
+  while (target.children.length > tape.length) target.lastElementChild.remove();
+  while (target.children.length < tape.length) target.append(tapeRow(target.ownerDocument));
+
+  for (const [index, entry] of tape.entries()) fillTapeRow(target.children[index], entry);
+}
+
 // --- drawing internals ------------------------------------------------------------------
+
+// One row of the tape: which side took, how much, at what price, when. The cells are created
+// empty and filled by fillTapeRow, so a row is written once and then only updated.
+function tapeRow(doc) {
+  const row = doc.createElement('li');
+  row.className = 'tape-row';
+  for (const field of ['side', 'size', 'price', 'time']) {
+    const cell = doc.createElement('span');
+    cell.className = `tape-${field}`;
+    row.append(cell);
+  }
+  return row;
+}
+
+function fillTapeRow(row, entry) {
+  const [side, size, price, time] = row.children;
+  const write = (node, value) => {
+    if (node.textContent !== value) node.textContent = value;
+  };
+
+  // The side is on the row as well as in it: the word says which it was, and the attribute
+  // lets the stylesheet colour it. Neither carries the meaning alone (NFR-3).
+  const aggressor = entry?.aggressorSide === 'bid' || entry?.aggressorSide === 'ask'
+    ? entry.aggressorSide
+    : 'none';
+  if (row.dataset.side !== aggressor) row.dataset.side = aggressor;
+
+  write(side, formatAggressor(entry?.aggressorSide));
+  write(size, formatVolume(entry?.size));
+  write(price, formatPrice(entry?.price));
+  write(time, formatTapeTime(entry?.timeMs));
+}
+
 
 // Match the backing store to the element's size in device pixels and work in CSS pixels
 // thereafter, so text stays sharp on a high-density display and the layout arithmetic above
