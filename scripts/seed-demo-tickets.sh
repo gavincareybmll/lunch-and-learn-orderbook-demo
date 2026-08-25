@@ -62,7 +62,7 @@ COLD=$(join \
   "$(p 'Extends REQ-10 (top-of-book readout). Held back deliberately by PRD section 8, so nothing else depends on it.')" \
   "$(h 'Acceptance criteria')" \
   "$(ul \
-     'Given a best bid of 99 and a best ask of 101, when the spread in basis points is computed, then it is 100.0 (spread divided by mid, times 10000).' \
+     'Given a best bid of 99 and a best ask of 101, when the spread in basis points is computed, then it is 200.0 - the quoted spread of 2, divided by the mid of 100, times 10000.' \
      'Given a book with one side empty, when the spread in basis points is computed, then it is reported as unavailable rather than as a number.' \
      'Given the readout, when it is viewed, then the basis points figure appears beside the absolute spread and is labelled bps.')" \
   "$(h 'Visual expectation')" \
