@@ -11,6 +11,11 @@ here — no licensed feed, no real venue, no real instrument.
 
 Complete and live: **https://bmll-orderbook-factory-demo.netlify.app**
 
+**The factory itself is hibernating.** It was run for a session on 26 August 2026 and then
+switched off: the build and deploy workflows are disabled and the Anthropic credential has been
+deleted, so moving a Jira ticket no longer starts anything. The site, the specification and the
+deck are unaffected. **Waking it up: [`HIBERNATION.md`](HIBERNATION.md).**
+
 Every line of the application was written by an AI agent responding to a Jira ticket. Ten tickets,
 114 tests, five modules, built from [`public/prd.html`](public/prd.html) — the specification came
 first and the code follows from it, not the other way round.
@@ -19,6 +24,7 @@ The scaffolding — workflows, agent prompts, the Jira toolkit — was written b
 **How it works and why:** [`FACTORY.md`](FACTORY.md).
 **How to build the same thing yourself, step by step:** [`SETUP.md`](SETUP.md).
 **Which model to run it on, measured rather than assumed:** [`MODEL-CHOICE.md`](MODEL-CHOICE.md).
+**How it was switched off, and how to switch it back on:** [`HIBERNATION.md`](HIBERNATION.md).
 
 ## How it gets built
 
@@ -75,6 +81,7 @@ python3 -m http.server -d public 8000
 | `FACTORY.md` | How the factory works and why |
 | `MODEL-CHOICE.md` | Opus vs Sonnet vs Haiku on the same tickets, and which to run |
 | `SETUP.md` | Step-by-step guide to standing up your own |
+| `HIBERNATION.md` | How the factory was switched off, and how to wake it up |
 
 Application source lives under `public/src/`, with the module boundaries fixed by §6 of the PRD
 rather than chosen during implementation — so each ticket extended a known structure instead of

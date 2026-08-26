@@ -318,3 +318,15 @@ you confirm, but the fix is to re-run `set-baseline.sh` rather than confirm.
 
 That last row is worth internalising as a habit rather than a fix: **prove each link before
 building on it.** Everything above is a checklist derived from getting that wrong.
+
+---
+
+## Switching it off again
+
+A factory left armed is a Jira board anyone can spend money from. When a demonstration is over,
+disable the workflows *and* delete the Anthropic credential — both, because either one alone
+leaves a gap. **[`HIBERNATION.md`](HIBERNATION.md)** has the commands, the reasoning, and what to
+do to bring it back.
+
+Worth deciding before you ever arm it: the factory has no internal spend cap. Set one where it is
+actually enforced — a limit on the Anthropic account, not a note in a document.
