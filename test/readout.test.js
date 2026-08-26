@@ -107,7 +107,8 @@ test('Given a populated book, when the readout is read from it, then it reports 
 });
 
 test('Given the spread, when it is shown, then it is an absolute number of price rather than a ratio or a percentage', () => {
-  // Held back by PRD section 8: basis points are deliberately not part of version 1.0.
+  // LLD-61 added the same gap in basis points as a second figure beside this one; this field
+  // is still the absolute one, in the units of the prices either side of it.
   const text = formatReadout(topOfBook({ bid: level(99.5), ask: level(100.5) }));
 
   assert.equal(text.spread, '1.00');
