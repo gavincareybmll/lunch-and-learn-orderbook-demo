@@ -347,6 +347,7 @@ const QUEUE_RULE_CAPTION = 'The part at the left-hand end of each bar is the nex
 // readout says so in words. A number in that position would be an invention.
 export function topOfBook(touch) {
   const priceOf = (level) => (Number.isFinite(level?.price) ? level.price : null);
+  const volumeOf = (level) => (Number.isFinite(level?.volume) ? level.volume : null);
   const bid = priceOf(touch?.bid);
   const ask = priceOf(touch?.ask);
   const twoSided = bid !== null && ask !== null;
@@ -354,10 +355,61 @@ export function topOfBook(touch) {
   return {
     bid,
     ask,
+    // What is resting at each of those two prices. Carried here because a price at the touch
+    // is drawn at a size set by it - see quoteScales - and null for a side with nothing on
+    // it, which is a size that does not exist rather than a size of zero.
+    bidVolume: volumeOf(touch?.bid),
+    askVolume: volumeOf(touch?.ask),
     // Absolute, in the same units as the prices either side of it. Basis points are held
     // back by PRD section 8.
     spread: twoSided ? ask - bid : null,
     mid: twoSided ? (bid + ask) / 2 : null,
+  };
+}
+
+// The band a price at the touch may be drawn in, as a multiple of the size the stylesheet
+// gives it. Bounded at both ends for two different reasons: the floor is legibility - the
+// smaller quote is still a price to be read from the back of a room (NFR-3) - and the ceiling
+// keeps the largest a price can grow to below the mid, which stays the most prominent number
+// on the page (REQ-13). Between them the band spans a doubling, which is a difference a
+// viewer sees rather than one only arithmetic notices.
+export const QUOTE_SCALE_MIN = 0.7;
+export const QUOTE_SCALE_MAX = 1.4;
+
+// How large to draw one price, given what rests at it and the largest quote it is being shown
+// beside. Proportional: a quote with four fifths of the volume is drawn at four fifths of the
+// size, which is the same rule barWidth() gives the ladder's bars - so a size means the same
+// thing wherever the page uses one.
+//
+// Nothing to go by - no reference to be relative to, or no volume at that price because there
+// is no order there - is a neutral 1 rather than a zero or a NaN: an absent price is a
+// sentence, and a sentence must not be shrunk to nothing.
+export function quoteScale(volume, referenceVolume) {
+  const reference = Number.isFinite(referenceVolume) && referenceVolume > 0 ? referenceVolume : 0;
+  const size = Number.isFinite(volume) && volume > 0 ? volume : 0;
+  if (reference === 0 || size === 0) return 1;
+
+  const proportional = QUOTE_SCALE_MAX * (size / reference);
+  return Math.min(QUOTE_SCALE_MAX, Math.max(QUOTE_SCALE_MIN, proportional));
+}
+
+// The sizes the two prices of the readout are drawn at. The scale spans both sides, as the
+// ladder's does: the larger of the two quotes is drawn at the top of the band and the other in
+// proportion to it, so the pair reads as a comparison of the two rather than as two unrelated
+// numbers.
+//
+// The mid is not in here. Nothing rests at the mid - it is the point between the two prices,
+// not a price anyone is quoting - so there is no size for it to be relative to.
+export function quoteScales(model) {
+  const { bidVolume = null, askVolume = null } = model ?? {};
+  const reference = Math.max(
+    Number.isFinite(bidVolume) ? bidVolume : 0,
+    Number.isFinite(askVolume) ? askVolume : 0,
+  );
+
+  return {
+    bid: quoteScale(bidVolume, reference),
+    ask: quoteScale(askVolume, reference),
   };
 }
 
@@ -752,9 +804,15 @@ export function drawQueues(canvas, queues, { maxSegments = QUEUE_MAX_SEGMENTS } 
 // Each slot is also marked available or not, because an absent price is a sentence where a
 // number would be and cannot be set at the size of one. That is a presentational fact about
 // the value, so it is stated here and answered in CSS.
+//
+// The two prices at the touch also carry the size they are drawn at, as a multiple of their
+// base size, for the same reason and in the same way: the arithmetic is here, where it can be
+// tested, and the stylesheet applies it. Rounded, and written only when it changes, because
+// this runs every frame.
 export function drawReadout(target, model) {
   if (!target) return;
   const text = formatReadout(model);
+  const scales = quoteScales(model);
 
   for (const field of READOUT_FIELDS) {
     const node = target.querySelector(`[data-readout="${field}"]`);
@@ -763,6 +821,13 @@ export function drawReadout(target, model) {
     if (node.textContent !== text[field]) node.textContent = text[field];
     const available = Number.isFinite(model?.[field]) ? 'true' : 'false';
     if (node.dataset.available !== available) node.dataset.available = available;
+
+    const scale = scales[field];
+    if (scale === undefined) continue;
+    const written = scale.toFixed(3);
+    if (node.style.getPropertyValue('--quote-scale') !== written) {
+      node.style.setProperty('--quote-scale', written);
+    }
   }
 }
 

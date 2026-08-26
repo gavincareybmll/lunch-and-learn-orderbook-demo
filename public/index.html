@@ -141,6 +141,24 @@
   }
   .quote.bid .quote-price { color: var(--bid); }
   .quote.ask .quote-price { color: var(--ask); }
+
+  /* Each price at the touch is drawn at a size set by how much is resting at it: the biggest
+     quote on screen is the largest, and the other in proportion to it. The multiple is
+     computed in render.js, where it can be tested, and arrives on the element as
+     --quote-scale.
+
+     Scaled rather than set as a font-size, so the element keeps the size of its box: a price
+     that grows never nudges the mid price off centre, and a size changing many times a second
+     costs no relayout (NFR-4). The eased transition is what stops a busy touch reading as
+     text flickering. */
+  .quote.bid .quote-price, .quote.ask .quote-price {
+    transform: scale(var(--quote-scale, 1));
+    transform-origin: center center;
+    transition: transform 140ms ease-out;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .quote.bid .quote-price, .quote.ask .quote-price { transition: none; }
+  }
   .quote.mid .quote-price {
     font-size: clamp(2.9rem, 7.5vw, 5.5rem);
     letter-spacing: -.025em;
