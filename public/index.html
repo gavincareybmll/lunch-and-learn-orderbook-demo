@@ -148,6 +148,20 @@
   .quote-note { margin: .1rem 0 0; color: var(--muted); font-size: clamp(.78rem, 1.05vw, .95rem); }
   .quote-note .quote-figure { font-family: var(--mono); font-weight: 600; color: var(--ink); }
 
+  /* What has traded so far, at the end of the row: a record of the session beside a snapshot
+     of the touch. Set at barely more than the label above it - a quarter of the mid - because
+     these two are the smallest figures in the readout, not a third and fourth price competing
+     with the one an eye is meant to land on first (REQ-13). */
+  .quote.traded { align-self: center; }
+  .quote.traded .quote-traded {
+    margin: 0;
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: clamp(1rem, 1.7vw, 1.3rem);
+    line-height: 1.15;
+    color: var(--ink);
+  }
+
   /* An absent price is a sentence where a number would be, and cannot be set at the size of
      one. Every slot says so the same way, so nothing on the readout is ever a dash or a
      zero standing in for a price that does not exist. */
@@ -299,7 +313,7 @@
     </section>
   </header>
 
-  <section class="readout" id="readout" aria-label="Top of book: the best price on each side, the middle of the two, and the gap between them.">
+  <section class="readout" id="readout" aria-label="Top of book: the best price on each side, the middle of the two, and the gap between them - and beside those, how much has traded so far and at what average price.">
     <div class="quote bid">
       <p class="quote-label">Best bid - most anyone will pay</p>
       <p class="quote-price" data-readout="bid">-</p>
@@ -312,6 +326,14 @@
     <div class="quote ask">
       <p class="quote-label">Best ask - least anyone will sell for</p>
       <p class="quote-price" data-readout="ask">-</p>
+    </div>
+    <div class="quote traded">
+      <p class="quote-label">Volume - traded so far</p>
+      <p class="quote-traded" data-readout="volume">-</p>
+    </div>
+    <div class="quote traded">
+      <p class="quote-label">VWAP - average traded price</p>
+      <p class="quote-traded" data-readout="vwap">-</p>
     </div>
   </section>
 
