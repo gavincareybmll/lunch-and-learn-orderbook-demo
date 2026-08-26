@@ -9,6 +9,8 @@
 //
 // It also records what it was asked to draw: `calls` is every call in order and `text` every
 // string drawn, which is enough to assert that a panel said something rather than nothing.
+// Each call carries the fill and stroke colours in force when it was made, because a panel
+// drawn in the wrong theme's colours is a panel that draws perfectly well and reads wrongly.
 
 const METHODS = [
   'arc', 'beginPath', 'clearRect', 'clip', 'closePath', 'fill', 'fillRect', 'fillText',
@@ -25,6 +27,8 @@ export function fakeContext() {
     font: '10px sans-serif',
     textAlign: 'left',
     textBaseline: 'alphabetic',
+    fillStyle: null,
+    strokeStyle: null,
   };
 
   for (const method of METHODS) {
@@ -34,7 +38,7 @@ export function fakeContext() {
           throw new Error(`ctx.${method} was given ${arg} as argument ${index}`);
         }
       }
-      calls.push({ method, args });
+      calls.push({ method, args, fillStyle: ctx.fillStyle, strokeStyle: ctx.strokeStyle });
       if (method === 'fillText') text.push(args[0]);
       return undefined;
     };
@@ -67,3 +71,14 @@ export const drawnText = (canvas) => canvas.context.text;
 
 export const callsTo = (canvas, method) =>
   canvas.context.calls.filter((call) => call.method === method);
+
+// Which colour each painting call actually put on the canvas - the fill colour for a fill and
+// the stroke colour for a stroke. Everything that only moves the pen is ignored, so a style
+// left over from an earlier shape is never counted as a colour something was drawn in.
+const FILLS = new Set(['fill', 'fillRect', 'fillText']);
+const STROKES = new Set(['stroke', 'strokeRect']);
+
+export const drawnColours = (canvas) =>
+  canvas.context.calls
+    .filter((call) => FILLS.has(call.method) || STROKES.has(call.method))
+    .map((call) => (FILLS.has(call.method) ? call.fillStyle : call.strokeStyle));
