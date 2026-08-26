@@ -243,12 +243,14 @@ test('Given trades produced by the engine, when they are recorded, then the tota
   addLimitOrder(book, { id: 'a1', side: 'ask', price: 101, size: 40 });
   addLimitOrder(book, { id: 'a2', side: 'ask', price: 102, size: 60 });
 
-  // Takes all 40 at 101 and 20 of the 60 at 102: 60 traded, for 4060.
+  // Takes all 40 at 101 and 20 of the 60 at 102: 60 traded, for 40x101 + 20x102 = 6080.
   const trades = submitMarketOrder(book, { id: 't1', side: 'bid', size: 60 });
   const { volume, vwap } = sessionTotals(recordSession(EMPTY_SESSION, trades));
 
   assert.equal(volume, 60);
-  assert.ok(Math.abs(vwap - 4060 / 60) < 1e-9, `expected ${4060 / 60}, got ${vwap}`);
+  assert.equal(trades.length, 2, 'two resting orders were taken, so two trades');
+  assert.ok(Math.abs(vwap - 6080 / 60) < 1e-9, `expected ${6080 / 60}, got ${vwap}`);
+  assert.ok(vwap > 101 && vwap < 102, 'mostly filled at 101, topped up at 102');
 });
 
 test('Given randomised flow, when the totals are kept as it runs, then volume only ever grows and VWAP stays within the prices that traded', () => {

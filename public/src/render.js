@@ -361,6 +361,47 @@ export function topOfBook(touch) {
   };
 }
 
+// --- what has traded this session (REQ-10) ----------------------------------------------
+
+// The rest of the readout says what the price is now; these two say what has happened. They
+// are kept as a running accumulator rather than recomputed from the tape, because the tape is
+// bounded to its last few dozen trades (REQ-9) - a total taken from it would quietly turn into
+// a total of the recent past.
+//
+// Notional - size times price, summed - is what is carried rather than the average itself. An
+// average cannot be updated by a later trade without the weight that stands behind it, and
+// carrying both numbers is what makes this an O(1) update per event (NFR-4).
+export const EMPTY_SESSION = Object.freeze({ volume: 0, notional: 0, trades: 0 });
+
+// Add the trades of one event to the running totals. The totals belong to the caller - this
+// module holds no state - and the same object is returned when nothing was recorded, so a
+// caller can tell by identity whether anything changed.
+export function recordSession(session, trades) {
+  const running = session ?? EMPTY_SESSION;
+  const batch = Array.isArray(trades) ? trades : [];
+  if (batch.length === 0) return running;
+
+  let { volume, notional, trades: count } = running;
+  for (const trade of batch) {
+    if (!Number.isFinite(trade?.size) || !Number.isFinite(trade?.price)) continue;
+    volume += trade.size;
+    notional += trade.size * trade.price;
+    count += 1;
+  }
+
+  return count === running.trades ? running : { volume, notional, trades: count };
+}
+
+// What those totals say. Before anything has traded there is no volume to state and no average
+// to take - the division would be 0/0 - so both are null, exactly as mid and spread are null
+// while a side is empty. A zero in either slot would read as a fact rather than as an absence.
+export function sessionTotals(session) {
+  const { volume = 0, notional = 0, trades = 0 } = session ?? EMPTY_SESSION;
+  if (trades <= 0 || volume <= 0) return { volume: null, vwap: null };
+
+  return { volume, vwap: notional / volume };
+}
+
 // Said in words, because a dash or a zero in place of a price reads as a price of nothing
 // rather than as an absence (NFR-3).
 export const NO_BIDS = 'No buyers waiting';
@@ -368,18 +409,33 @@ export const NO_ASKS = 'No sellers waiting';
 export const NO_MID = 'No mid price while one side is empty';
 // Reads after the word "Spread", which is where it appears.
 export const NO_SPREAD = 'unavailable while one side is empty';
+// Nothing has traded yet - which is a different absence from an empty side, and worth saying
+// differently, because the book can be perfectly two-sided and still have traded nothing.
+export const NO_VOLUME = 'Nothing has traded yet';
+export const NO_VWAP = 'No average price yet';
 
-const READOUT_FIELDS = ['bid', 'ask', 'mid', 'spread'];
+const READOUT_FIELDS = ['bid', 'ask', 'mid', 'spread', 'volume', 'vwap'];
 
-// The four numbers of the readout as the strings that go on the page.
+// The numbers of the readout as the strings that go on the page.
 export function formatReadout(model) {
-  const { bid = null, ask = null, mid = null, spread = null } = model ?? {};
+  const {
+    bid = null,
+    ask = null,
+    mid = null,
+    spread = null,
+    volume = null,
+    vwap = null,
+  } = model ?? {};
 
   return {
     bid: bid === null ? NO_BIDS : formatPrice(bid),
     ask: ask === null ? NO_ASKS : formatPrice(ask),
     mid: mid === null ? NO_MID : formatPrice(mid),
     spread: spread === null ? NO_SPREAD : formatPrice(spread),
+    // A count of shares and a price respectively, formatted as the ladder and the tape
+    // already format each of them.
+    volume: volume === null ? NO_VOLUME : formatVolume(volume),
+    vwap: vwap === null ? NO_VWAP : formatPrice(vwap),
   };
 }
 
@@ -746,7 +802,7 @@ export function drawQueues(canvas, queues, { maxSegments = QUEUE_MAX_SEGMENTS } 
 }
 
 // Write the top-of-book readout into the page (REQ-10). `target` is the element holding the
-// four slots, each marked with `data-readout`; the markup and its type sizes live in the
+// slots, each marked with `data-readout`; the markup and its type sizes live in the
 // stylesheet, and this only ever puts text in them.
 //
 // Each slot is also marked available or not, because an absent price is a sentence where a

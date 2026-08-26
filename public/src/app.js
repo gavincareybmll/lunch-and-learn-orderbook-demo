@@ -26,8 +26,11 @@ import {
   drawTape,
   playbackControl,
   recordMid,
+  recordSession,
   recordTrades,
+  sessionTotals,
   topOfBook,
+  EMPTY_SESSION,
   CHART_LIMIT,
   CHART_WINDOW_MS,
   TAPE_LIMIT,
@@ -87,6 +90,10 @@ export function createSimulation(seed = FLOW.seed) {
     // empty plot (REQ-11).
     series: [],
     nextSampleMs: 0,
+    // Everything that has traded since the page opened, warmup included - the tape and the
+    // chart both count from the same point, and a session that began before the first frame
+    // is the one a viewer is watching (REQ-10).
+    session: EMPTY_SESSION,
     // The page opens on a running market: a still one would have to be started before there
     // was anything to look at.
     paused: false,
@@ -107,6 +114,9 @@ function apply(state) {
   sampleMid(state, flowMs);
   if (trades.length === 0) return;
 
+  // Counted from the trades as they happen rather than from the tape, which keeps only its
+  // last few dozen entries: the total is of the session, not of what is still on screen.
+  state.session = recordSession(state.session, trades);
   state.tape = recordTrades(state.tape, trades, { limit: FLOW.tapeEntries, timeMs: flowMs });
 }
 
@@ -191,6 +201,13 @@ export function touchLevels(state) {
   return { bid: bestBid(state.book), ask: bestAsk(state.book) };
 }
 
+// How much has traded this session and at what average price (REQ-10). Both are null until
+// something has traded. Nothing here resets them: pausing stops flow reaching the book, which
+// is what leaves these two figures holding their last value rather than falling back to zero.
+export function sessionTraded(state) {
+  return sessionTotals(state?.session);
+}
+
 // The trades printed so far, newest first and bounded (REQ-9).
 export function tradeTape(state) {
   return state.tape ?? [];
@@ -245,7 +262,11 @@ function start() {
 
     drawLadder(ladder, ladderDepth(state), { maxLevels: FLOW.ladderLevels });
     if (queues) drawQueues(queues, touchQueues(state), { maxSegments: FLOW.queueSegments });
-    if (readout) drawReadout(readout, topOfBook(touchLevels(state)));
+    // One model for the whole readout: the touch as it stands, and what has traded to get it
+    // there. The two halves come from different places and are written into the same row.
+    if (readout) {
+      drawReadout(readout, { ...topOfBook(touchLevels(state)), ...sessionTraded(state) });
+    }
     if (chart) drawChart(chart, midSeries(state), { windowMs: FLOW.chartWindowMs });
 
     // The tape only changes when something traded, and recordTrades returns the same list
