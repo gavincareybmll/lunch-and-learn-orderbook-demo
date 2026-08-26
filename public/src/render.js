@@ -26,22 +26,112 @@
 
 const LADDER_ROWS_PER_SIDE = 8;
 
-// Dark, high contrast, and legible from the back of a room (NFR-3). Sides are separated by
-// position and by their labels as well as by colour, so nothing here is the only carrier of
-// meaning. No web fonts: a font request would be a runtime network call (NFR-1).
-const THEME = {
-  text: '#e8eefc',
-  muted: '#8fa0c4',
-  // For text sitting on a solid fill, where the light ink above would disappear.
-  solidInk: '#08101f',
-  rule: 'rgba(140,165,220,0.14)',
-  centre: 'rgba(200,218,255,0.8)',
-  ask: { text: '#ff9a90', bar: 'rgba(255,107,98,0.30)', edge: '#ff6b62' },
-  bid: { text: '#59d69f', bar: 'rgba(46,199,133,0.28)', edge: '#2ec785' },
-  // The mid price is neither side's number - it is the point between the two - so it is drawn
-  // in neither side's colour.
-  price: { line: '#8ab8ff', tag: '#dbe8ff', leader: 'rgba(138,184,255,0.45)' },
+// High contrast either way round, and legible from the back of a room (NFR-3). Sides are
+// separated by position and by their labels as well as by colour, so nothing here is the only
+// carrier of meaning. No web fonts: a font request would be a runtime network call (NFR-1).
+//
+// Two palettes, because the same screen is shown in a dark room and in a daylit one, and a
+// dark page on a projector with poor black levels is a grey one. Every colour the canvases
+// draw in is named here for both, so a theme is a whole alternate palette rather than an
+// inversion - which would leave a red and a green that read as the same tone.
+//
+// `paper` and `panel` are the surfaces underneath rather than anything drawn: the canvas is
+// transparent over the page, so the ink above only has a contrast ratio at all relative to
+// these, and they are stated so that ratio can be checked. They are the same two values the
+// stylesheet gives `--paper` and `--panel` for that theme; that duplication is unavoidable
+// without a build step (NFR-2), so a test asserts the two agree.
+const THEMES = {
+  dark: {
+    paper: '#080d1c',
+    panel: '#0d1428',
+    text: '#e8eefc',
+    muted: '#8fa0c4',
+    // For text sitting on a solid fill, where the light ink above would disappear.
+    solidInk: '#08101f',
+    rule: 'rgba(140,165,220,0.14)',
+    centre: 'rgba(200,218,255,0.8)',
+    ask: { text: '#ff9a90', bar: 'rgba(255,107,98,0.30)', edge: '#ff6b62' },
+    bid: { text: '#59d69f', bar: 'rgba(46,199,133,0.28)', edge: '#2ec785' },
+    // The mid price is neither side's number - it is the point between the two - so it is
+    // drawn in neither side's colour.
+    price: { line: '#8ab8ff', tag: '#dbe8ff', leader: 'rgba(138,184,255,0.45)' },
+  },
+  light: {
+    // Panels white on a faintly tinted page, so a panel is still an object on a surface
+    // rather than a rectangle of the same white as everything around it.
+    paper: '#eef1f7',
+    panel: '#ffffff',
+    text: '#141b3c',
+    muted: '#4e5875',
+    // Light ink now, for the same reason: the solid segment is a saturated fill either way.
+    solidInk: '#ffffff',
+    rule: 'rgba(28,41,95,0.16)',
+    centre: 'rgba(28,41,95,0.75)',
+    // Darkened rather than reused: the dark theme's red and green are pale tints, which on
+    // white are a pair of hairlines. These are the same two hues at printing weight - and the
+    // red is taken deliberately darker than the green, because a red and a green of equal
+    // weight are the same grey to a colour-blind reader and in a greyscale handout (NFR-3).
+    ask: { text: '#8f150e', bar: 'rgba(176,35,27,0.16)', edge: '#b0231b' },
+    bid: { text: '#0f6f3d', bar: 'rgba(21,127,71,0.14)', edge: '#157f47' },
+    price: { line: '#1a5fb4', tag: '#12386e', leader: 'rgba(26,95,180,0.45)' },
+  },
 };
+
+export const THEME_NAMES = Object.keys(THEMES);
+
+// Dark for a first-time viewer: the page has always opened dark, and a saved preference is
+// the only thing that changes it.
+export const DEFAULT_THEME = 'dark';
+
+// Anything that is not one of the two themes is no preference rather than a third theme - a
+// stale value in storage, or a hand-edited attribute, opens the page as it has always opened.
+export function themeName(value) {
+  return Object.hasOwn(THEMES, value) ? value : DEFAULT_THEME;
+}
+
+export function themePalette(name) {
+  return THEMES[themeName(name)];
+}
+
+// The other one. Two themes, so a toggle needs no state of its own beyond the name it has.
+export function toggleTheme(name) {
+  return themeName(name) === 'dark' ? 'light' : 'dark';
+}
+
+// What the theme control says, given which theme is on. Like the playback control, the button
+// says what it will do next rather than which theme is showing: a control labelled with its
+// own state is read as a description by half a room and as an action by the other half. The
+// sentence beside it is the half that does describe the state, and says so in words.
+export const LIGHT_LABEL = 'Switch to light';
+export const DARK_LABEL = 'Switch to dark';
+export const LIGHT_STATUS = 'Light theme - for a bright room';
+export const DARK_STATUS = 'Dark theme - for a dim room';
+
+export function themeControl(name) {
+  const theme = themeName(name);
+  return {
+    theme,
+    label: theme === 'dark' ? LIGHT_LABEL : DARK_LABEL,
+    status: theme === 'dark' ? DARK_STATUS : LIGHT_STATUS,
+  };
+}
+
+// Write the theme control into the page. `target` holds the button and the status line, each
+// marked with `data-theme-control`; the theme itself is put on the target as well, so the
+// stylesheet can mark which of the two is on rather than leaving it to the words alone
+// (NFR-3). The attribute that actually repaints the page is the one on the root element, and
+// that is the wiring's to set - this only ever puts text in slots.
+export function drawTheme(target, control) {
+  if (!target) return;
+  const model = control ?? themeControl(DEFAULT_THEME);
+
+  for (const [field, text] of Object.entries({ toggle: model.label, status: model.status })) {
+    const node = target.querySelector(`[data-theme-control="${field}"]`);
+    if (node && node.textContent !== text) node.textContent = text;
+  }
+
+  if (target.dataset.theme !== model.theme) target.dataset.theme = model.theme;
+}
 
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace';
 const SANS = 'ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
@@ -628,7 +718,11 @@ function chartArea(width, height) {
 
 // Draw a depth snapshot into a canvas. Reads the data and returns nothing; called once per
 // frame, and safe to call with an empty book.
-export function drawLadder(canvas, data, { maxLevels = LADDER_ROWS_PER_SIDE } = {}) {
+export function drawLadder(canvas, data, {
+  maxLevels = LADDER_ROWS_PER_SIDE,
+  theme = DEFAULT_THEME,
+} = {}) {
+  const palette = themePalette(theme);
   const ctx = canvas.getContext('2d');
   const { width, height } = fitToDisplay(canvas, ctx);
   ctx.clearRect(0, 0, width, height);
@@ -642,12 +736,12 @@ export function drawLadder(canvas, data, { maxLevels = LADDER_ROWS_PER_SIDE } = 
   const layout = ladderLayout(model, { height: ladderHeight, maxLevels, barSpace: columns.barSpace });
   const top = band;
 
-  drawSideLabel(ctx, columns, band * 0.34, 'ask', 'Asks - sellers, lowest price first');
-  drawColumnHeadings(ctx, columns, band - 12);
-  drawSideLabel(ctx, columns, height - band * 0.5, 'bid', 'Bids - buyers, highest price first');
+  drawSideLabel(ctx, columns, band * 0.34, 'ask', 'Asks - sellers, lowest price first', palette);
+  drawColumnHeadings(ctx, columns, band - 12, palette);
+  drawSideLabel(ctx, columns, height - band * 0.5, 'bid', 'Bids - buyers, highest price first', palette);
 
   if (layout.rows.length === 0) {
-    ctx.fillStyle = THEME.muted;
+    ctx.fillStyle = palette.muted;
     ctx.font = `500 ${Math.round(Math.min(24, width * 0.03))}px ${SANS}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -655,8 +749,8 @@ export function drawLadder(canvas, data, { maxLevels = LADDER_ROWS_PER_SIDE } = 
     return;
   }
 
-  for (const row of layout.rows) drawRow(ctx, row, layout.rowHeight, columns, top);
-  drawTouchRule(ctx, columns, top + layout.centreY);
+  for (const row of layout.rows) drawRow(ctx, row, layout.rowHeight, columns, top, palette);
+  drawTouchRule(ctx, columns, top + layout.centreY, palette);
 }
 
 // Draw the individual orders resting at the best bid and the best ask (REQ-8). `queues` is
@@ -668,7 +762,11 @@ export function drawLadder(canvas, data, { maxLevels = LADDER_ROWS_PER_SIDE } = 
 // so the two panels still agree about which side is which - but a bar cut into parts is a
 // different kind of picture from a column of rows, which is what stops this reading as the
 // ladder drawn twice.
-export function drawQueues(canvas, queues, { maxSegments = QUEUE_MAX_SEGMENTS } = {}) {
+export function drawQueues(canvas, queues, {
+  maxSegments = QUEUE_MAX_SEGMENTS,
+  theme = DEFAULT_THEME,
+} = {}) {
+  const palette = themePalette(theme);
   const ctx = canvas.getContext('2d');
   const { width, height } = fitToDisplay(canvas, ctx);
   ctx.clearRect(0, 0, width, height);
@@ -690,11 +788,11 @@ export function drawQueues(canvas, queues, { maxSegments = QUEUE_MAX_SEGMENTS } 
   ctx.textBaseline = 'alphabetic';
 
   ctx.font = `600 ${type.caption}px ${SANS}`;
-  ctx.fillStyle = THEME.text;
+  ctx.fillStyle = palette.text;
   cursor = drawWrapped(ctx, QUEUE_CAPTION, columns, cursor, type.caption * 1.35);
 
   ctx.font = `500 ${type.note}px ${SANS}`;
-  ctx.fillStyle = THEME.muted;
+  ctx.fillStyle = palette.muted;
   cursor += type.note * 0.5;
   cursor = drawWrapped(ctx, QUEUE_LEVEL_CAPTION, columns, cursor, type.note * 1.35);
   cursor = drawWrapped(ctx, QUEUE_RULE_CAPTION, columns, cursor, type.note * 1.35);
@@ -707,7 +805,7 @@ export function drawQueues(canvas, queues, { maxSegments = QUEUE_MAX_SEGMENTS } 
   );
 
   if (layout.bars.length === 0) {
-    ctx.fillStyle = THEME.muted;
+    ctx.fillStyle = palette.muted;
     ctx.font = `500 ${Math.round(Math.min(22, width * 0.035))}px ${SANS}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -715,7 +813,7 @@ export function drawQueues(canvas, queues, { maxSegments = QUEUE_MAX_SEGMENTS } 
     return;
   }
 
-  drawTouchRule(ctx, columns, top + layout.centreY);
+  drawTouchRule(ctx, columns, top + layout.centreY, palette);
 
   for (const side of ['ask', 'bid']) {
     const bar = layout.bars.find((candidate) => candidate.side === side);
@@ -727,21 +825,21 @@ export function drawQueues(canvas, queues, { maxSegments = QUEUE_MAX_SEGMENTS } 
     if (!bar) {
       const away = side === 'ask' ? -1 : 1;
       const baseline = top + layout.centreY + away * (layout.barHeight * 0.5);
-      drawQueueHeading(ctx, columns, baseline, type, side, price, null, label);
+      drawQueueHeading(ctx, columns, baseline, type, side, price, null, label, palette);
       continue;
     }
 
-    drawQueueBar(ctx, bar, columns, top);
+    drawQueueBar(ctx, bar, columns, top, palette);
 
     const barTop = top + bar.y;
     const heading = side === 'ask' ? barTop - type.note * 1.9 : barTop + bar.height + type.header * 1.05;
-    drawQueueHeading(ctx, columns, heading, type, side, price, bar, label);
+    drawQueueHeading(ctx, columns, heading, type, side, price, bar, label, palette);
 
     // What the trailing segment stands for, next to the end of the bar it belongs to: above
     // the sellers' bar, below the buyers'. Stated rather than dropped, so a long queue never
     // looks like a short one.
     const note = side === 'ask' ? heading - type.header * 1.15 : heading + type.note * 1.6;
-    drawQueueOverflow(ctx, columns, note, type, side, bar);
+    drawQueueOverflow(ctx, columns, note, type, side, bar, palette);
   }
 }
 
@@ -785,7 +883,11 @@ export function drawTape(target, entries) {
 // One line, plotted against time, and nothing else: no second series, no candles, no volume -
 // all held back by PRD section 8. Safe to call with fewer than two points, which draws the
 // plot and says there is nothing on it yet rather than drawing a line through one point.
-export function drawChart(canvas, series, { windowMs = CHART_WINDOW_MS } = {}) {
+export function drawChart(canvas, series, {
+  windowMs = CHART_WINDOW_MS,
+  theme = DEFAULT_THEME,
+} = {}) {
+  const palette = themePalette(theme);
   const ctx = canvas.getContext('2d');
   const { width, height } = fitToDisplay(canvas, ctx);
   ctx.clearRect(0, 0, width, height);
@@ -798,7 +900,7 @@ export function drawChart(canvas, series, { windowMs = CHART_WINDOW_MS } = {}) {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
   ctx.font = `600 ${type.caption}px ${SANS}`;
-  ctx.fillStyle = THEME.text;
+  ctx.fillStyle = palette.text;
 
   // Set to fit rather than clipped: the caption is the panel's whole explanation, and a
   // sentence running off the right-hand edge is worse than a slightly smaller one (REQ-13).
@@ -809,22 +911,22 @@ export function drawChart(canvas, series, { windowMs = CHART_WINDOW_MS } = {}) {
   }
   ctx.fillText(CHART_CAPTION, plot.pad, plot.pad + type.caption);
 
-  drawChartScale(ctx, model, type);
-  drawChartAxis(ctx, model, type);
+  drawChartScale(ctx, model, type, palette);
+  drawChartAxis(ctx, model, type, palette);
 
   // One point is a price, not a line. The plot is drawn either way, so the panel is a chart
   // waiting for prices rather than an empty rectangle.
   if (model.points.length < 2) {
     ctx.font = `500 ${Math.round(Math.min(22, width * 0.03))}px ${SANS}`;
-    ctx.fillStyle = THEME.muted;
+    ctx.fillStyle = palette.muted;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('Waiting for a mid price', (plot.left + plot.right) / 2, (plot.top + plot.bottom) / 2);
     return;
   }
 
-  drawChartLine(ctx, model, width);
-  drawChartTag(ctx, model, type, width);
+  drawChartLine(ctx, model, width, palette);
+  drawChartTag(ctx, model, type, width, palette);
 }
 
 // --- drawing internals ------------------------------------------------------------------
@@ -865,10 +967,10 @@ function fillTapeRow(row, entry) {
 // The vertical scale: a faint rule across the plot at each labelled price, and the price
 // itself outside the plot on the left. Three of them, so a price can be read off the line by
 // eye without the chart becoming a grid to measure against.
-function drawChartScale(ctx, model, type) {
+function drawChartScale(ctx, model, type, palette) {
   const { plot, ticks } = model;
 
-  ctx.strokeStyle = THEME.rule;
+  ctx.strokeStyle = palette.rule;
   ctx.lineWidth = 1;
   // With no prices yet there is no scale to label, so the plot is given its floor to sit on.
   for (const y of ticks.length > 0 ? ticks.map((tick) => tick.y) : [plot.bottom]) {
@@ -879,7 +981,7 @@ function drawChartScale(ctx, model, type) {
   }
 
   ctx.font = `500 ${type.label}px ${MONO}`;
-  ctx.fillStyle = THEME.muted;
+  ctx.fillStyle = palette.muted;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   for (const tick of ticks) {
@@ -890,12 +992,12 @@ function drawChartScale(ctx, model, type) {
 // The time axis, said in words at either end rather than as a row of timestamps: the left edge
 // is a stated distance into the past and the right edge is now, which is all a reader needs to
 // know that the line runs left to right.
-function drawChartAxis(ctx, model, type) {
+function drawChartAxis(ctx, model, type, palette) {
   const { plot } = model;
   const baseline = plot.bottom + type.label * 1.3;
 
   ctx.font = `500 ${type.label}px ${SANS}`;
-  ctx.fillStyle = THEME.muted;
+  ctx.fillStyle = palette.muted;
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
   ctx.fillText(formatChartAge(model.windowMs), plot.left, baseline);
@@ -903,8 +1005,8 @@ function drawChartAxis(ctx, model, type) {
   ctx.fillText('now', plot.right, baseline);
 }
 
-function drawChartLine(ctx, model, width) {
-  ctx.strokeStyle = THEME.price.line;
+function drawChartLine(ctx, model, width, palette) {
+  ctx.strokeStyle = palette.price.line;
   // Thick enough to be a line from the back of a room rather than a scratch (NFR-3).
   ctx.lineWidth = Math.max(2.5, Math.min(5, width * 0.004));
   ctx.lineJoin = 'round';
@@ -919,10 +1021,10 @@ function drawChartLine(ctx, model, width) {
 // Where the line has got to, said as a number at the end of it. A viewer glancing up
 // mid-session reads the current price off the tag rather than having to find the right-hand
 // end of the line by eye, and the dot and the leader are what tie the two together.
-function drawChartTag(ctx, model, type, width) {
+function drawChartTag(ctx, model, type, width, palette) {
   const last = model.points.at(-1);
 
-  ctx.strokeStyle = THEME.price.leader;
+  ctx.strokeStyle = palette.price.leader;
   ctx.lineWidth = 1;
   ctx.setLineDash([4, 4]);
   ctx.beginPath();
@@ -931,13 +1033,13 @@ function drawChartTag(ctx, model, type, width) {
   ctx.stroke();
   ctx.setLineDash([]);
 
-  ctx.fillStyle = THEME.price.line;
+  ctx.fillStyle = palette.price.line;
   ctx.beginPath();
   ctx.arc(last.x, last.y, Math.max(3.5, type.label * 0.34), 0, Math.PI * 2);
   ctx.fill();
 
   ctx.font = `600 ${type.price}px ${MONO}`;
-  ctx.fillStyle = THEME.price.tag;
+  ctx.fillStyle = palette.price.tag;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
   ctx.fillText(formatPrice(last.price), width - model.plot.pad, last.y);
@@ -984,13 +1086,13 @@ function columnsFor(width) {
   };
 }
 
-function drawRow(ctx, row, rowHeight, columns, top) {
-  const palette = THEME[row.side];
+function drawRow(ctx, row, rowHeight, columns, top, palette) {
+  const side = palette[row.side];
   const y = top + row.y;
   const middle = y + rowHeight / 2;
   const fontSize = Math.max(14, Math.min(30, rowHeight * 0.62));
 
-  ctx.strokeStyle = THEME.rule;
+  ctx.strokeStyle = palette.rule;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(columns.pad, Math.round(y) + 0.5);
@@ -1000,28 +1102,28 @@ function drawRow(ctx, row, rowHeight, columns, top) {
   if (row.barWidth > 0) {
     const barHeight = Math.max(10, Math.min(34, rowHeight * 0.62));
     const barY = middle - barHeight / 2;
-    ctx.fillStyle = palette.bar;
+    ctx.fillStyle = side.bar;
     ctx.fillRect(columns.barLeft, barY, row.barWidth, barHeight);
-    ctx.fillStyle = palette.edge;
+    ctx.fillStyle = side.edge;
     ctx.fillRect(columns.barLeft, barY, Math.min(3, row.barWidth), barHeight);
   }
 
   ctx.textBaseline = 'middle';
   ctx.font = `600 ${fontSize}px ${MONO}`;
   ctx.textAlign = 'left';
-  ctx.fillStyle = palette.text;
+  ctx.fillStyle = side.text;
   ctx.fillText(formatPrice(row.price), columns.priceX, middle);
 
   ctx.textAlign = 'right';
-  ctx.fillStyle = THEME.text;
+  ctx.fillStyle = palette.text;
   ctx.fillText(formatVolume(row.volume), columns.volumeRight, middle);
 
   ctx.font = `500 ${Math.max(12, fontSize * 0.82)}px ${SANS}`;
-  ctx.fillStyle = THEME.muted;
+  ctx.fillStyle = palette.muted;
   ctx.fillText(formatOrderCount(row.orderCount), columns.ordersRight, middle);
 }
 
-function drawSideLabel(ctx, columns, y, side, label) {
+function drawSideLabel(ctx, columns, y, side, label, palette) {
   const fontSize = Math.max(15, Math.min(22, columns.width * 0.018));
   ctx.textBaseline = 'middle';
   ctx.textAlign = 'left';
@@ -1029,17 +1131,17 @@ function drawSideLabel(ctx, columns, y, side, label) {
   // A filled square as well as the colour, so the two sides are still told apart in
   // greyscale or by a colour-blind reader (NFR-3).
   const marker = fontSize * 0.72;
-  ctx.fillStyle = THEME[side].edge;
+  ctx.fillStyle = palette[side].edge;
   ctx.fillRect(columns.pad, y - marker / 2, marker, marker);
 
   ctx.font = `600 ${fontSize}px ${SANS}`;
-  ctx.fillStyle = THEME[side].text;
+  ctx.fillStyle = palette[side].text;
   ctx.fillText(label, columns.pad + marker + fontSize * 0.6, y);
 }
 
-function drawColumnHeadings(ctx, columns, y) {
+function drawColumnHeadings(ctx, columns, y, palette) {
   ctx.font = `500 ${Math.max(11, Math.min(15, columns.width * 0.012))}px ${SANS}`;
-  ctx.fillStyle = THEME.muted;
+  ctx.fillStyle = palette.muted;
   ctx.textBaseline = 'alphabetic';
 
   ctx.textAlign = 'left';
@@ -1067,8 +1169,8 @@ function queueColumnsFor(width) {
 // One price level: a single outlined bar, cut into a segment per resting order. The joins are
 // what make it a Level 3 picture, so they are drawn as gaps in the fill as well as edges -
 // countable in greyscale, and countable at the back of a room (NFR-3).
-function drawQueueBar(ctx, bar, columns, top) {
-  const palette = THEME[bar.side];
+function drawQueueBar(ctx, bar, columns, top, palette) {
+  const side = palette[bar.side];
   const y = top + bar.y;
   if (bar.height <= 0 || bar.width <= 0) return;
 
@@ -1084,11 +1186,11 @@ function drawQueueBar(ctx, bar, columns, top) {
 
     // The leading segment is the one that trades next, so it is the only solid one: emphasis
     // that survives greyscale, on top of its position at the head of the bar.
-    ctx.fillStyle = segment.leading ? palette.edge : palette.bar;
+    ctx.fillStyle = segment.leading ? side.edge : side.bar;
     ctx.fillRect(left, y, drawn, bar.height);
 
     if (!segment.leading) {
-      ctx.strokeStyle = palette.edge;
+      ctx.strokeStyle = side.edge;
       ctx.lineWidth = 1;
       ctx.strokeRect(left + 0.5, y + 0.5, Math.max(1, drawn - 1), bar.height - 1);
     }
@@ -1100,7 +1202,7 @@ function drawQueueBar(ctx, bar, columns, top) {
       : formatQueueSegmentLabel(segment);
     ctx.font = `${segment.leading ? 700 : 500} ${fontSize}px ${segment.combined ? SANS : MONO}`;
     if (ctx.measureText(text).width + fontSize <= drawn) {
-      ctx.fillStyle = segment.leading ? THEME.solidInk : THEME.text;
+      ctx.fillStyle = segment.leading ? palette.solidInk : palette.text;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(text, left + drawn / 2, y + bar.height / 2);
@@ -1108,30 +1210,30 @@ function drawQueueBar(ctx, bar, columns, top) {
   }
 
   // The level, outlined once around all of it: the segments are parts of this one thing.
-  ctx.strokeStyle = palette.edge;
+  ctx.strokeStyle = side.edge;
   ctx.lineWidth = 2;
   ctx.strokeRect(columns.barLeft + 1, y + 1, bar.width - 2, bar.height - 2);
 }
 
 // Whose bar this is, at what price, and what it adds up to - the same two numbers the ladder
 // row for that price shows, so the two panels can be read against each other.
-function drawQueueHeading(ctx, columns, baseline, type, side, price, bar, label) {
+function drawQueueHeading(ctx, columns, baseline, type, side, price, bar, label, palette) {
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
 
   // A filled square as well as the colour, so the sides are told apart in greyscale (NFR-3).
   const marker = type.header * 0.66;
-  ctx.fillStyle = THEME[side].edge;
+  ctx.fillStyle = palette[side].edge;
   ctx.fillRect(columns.pad, baseline - marker, marker, marker);
 
   ctx.font = `600 ${type.header}px ${SANS}`;
-  ctx.fillStyle = THEME[side].text;
+  ctx.fillStyle = palette[side].text;
   const heading = bar === null ? `${label} - none` : `${label} at ${formatPrice(price)}`;
   ctx.fillText(heading, columns.pad + marker + type.header * 0.5, baseline);
 
   if (bar === null) return;
   ctx.font = `500 ${type.note}px ${SANS}`;
-  ctx.fillStyle = THEME.muted;
+  ctx.fillStyle = palette.muted;
   ctx.textAlign = 'right';
   ctx.fillText(
     `${formatOrderCount(bar.total)} in this bar, ${formatVolume(bar.volume)} altogether`,
@@ -1140,13 +1242,13 @@ function drawQueueHeading(ctx, columns, baseline, type, side, price, bar, label)
   );
 }
 
-function drawQueueOverflow(ctx, columns, baseline, type, side, bar) {
+function drawQueueOverflow(ctx, columns, baseline, type, side, bar, palette) {
   const tail = bar.segments.at(-1);
   const text = formatQueueOverflow(bar.combined, tail?.size);
   if (text === '') return;
 
   ctx.font = `500 ${type.note}px ${SANS}`;
-  ctx.fillStyle = THEME[side].text;
+  ctx.fillStyle = palette[side].text;
   ctx.textAlign = 'right';
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(text, columns.sizeRight, baseline);
@@ -1182,8 +1284,8 @@ function drawWrapped(ctx, text, columns, baseline, lineHeight) {
 // immediately above it, which is the whole point of the ladder being centred.
 // Shared by both panels, so the line means the same thing in each: the right edge is taken
 // from the canvas rather than from a named column.
-function drawTouchRule(ctx, columns, y) {
-  ctx.strokeStyle = THEME.centre;
+function drawTouchRule(ctx, columns, y, palette) {
+  ctx.strokeStyle = palette.centre;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.moveTo(columns.pad, Math.round(y));

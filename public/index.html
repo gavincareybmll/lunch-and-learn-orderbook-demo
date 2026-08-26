@@ -5,20 +5,62 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Orderbook Lab</title>
 <meta name="description" content="A synthetic Level 3 limit order book simulator. Every value on screen is generated in the browser.">
+<!-- The saved theme, applied before the page paints. This has to be inline and it has to be
+     here: app.js is a module, so it runs only after the first paint, and setting the attribute
+     there would show a dark page for a frame before turning it light. Storage can throw rather
+     than return nothing - private browsing does - so the whole of it is guarded, and a failure
+     leaves the default theme in place. The key is the one app.js writes. -->
+<script>
+  try {
+    var saved = window.localStorage.getItem('orderbook-lab.theme');
+    if (saved === 'light' || saved === 'dark') document.documentElement.dataset.theme = saved;
+  } catch (unavailable) { /* nothing stored to honour */ }
+</script>
 <style>
-  /* System fonts only: a web font would be a runtime network call (NFR-1). */
-  :root {
+  /* System fonts only: a web font would be a runtime network call (NFR-1). The faces are not
+     part of a theme - both palettes are set in the same two - so they are stated once, apart
+     from the colours that do change. */
+  html {
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+
+  /* Two palettes, one page. Everything below states its colours as these custom properties and
+     never as a literal, so switching the attribute on the root element repaints the whole of it
+     at once; the canvases are drawn from the palette of the same name in render.js, which is
+     the only other place these values appear. Dark is the default, so it is what `:root` alone
+     means - a first visit with nothing saved gets it. */
+  :root, :root[data-theme="dark"] {
     color-scheme: dark;
     --paper: #080d1c;
     --panel: #0d1428;
     --rule: #1e2a4a;
     --ink: #e8eefc;
+    /* Where a control lifts on hover: away from the paper, in whichever direction that is. */
+    --ink-lift: #ffffff;
     --muted: #8fa0c4;
     --ask: #ff9a90;
     --bid: #59d69f;
     --held: #ffbf5a;
-    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    --held-wash: #2b2008;
+  }
+
+  /* For a bright room, or a projector with poor black levels where the dark page washes out.
+     A full alternate palette rather than an inversion: the pale red and green above are a pair
+     of hairlines on white, so the two sides are restated at printing weight, and every colour
+     here is at least 4.5:1 against the panel it is read on (NFR-3). */
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --paper: #eef1f7;
+    --panel: #ffffff;
+    --rule: #ccd4e4;
+    --ink: #141b3c;
+    --ink-lift: #000000;
+    --muted: #4e5875;
+    --ask: #8f150e;
+    --bid: #0f6f3d;
+    --held: #8a5200;
+    --held-wash: #fdf1dc;
   }
 
   * { box-sizing: border-box; }
@@ -89,7 +131,7 @@
     letter-spacing: .01em;
     cursor: pointer;
   }
-  .playback-button:hover { background: #fff; border-color: #fff; }
+  .playback-button:hover { background: var(--ink-lift); border-color: var(--ink-lift); }
   .playback-button:focus-visible { outline: 3px solid var(--held); outline-offset: 3px; }
   .playback-status {
     margin: 0;
@@ -100,12 +142,48 @@
 
   /* Paused, said three ways over: in the sentence, in the colour, and in the frame that
      thickens around the whole control - so none of it is carried by colour alone (NFR-3). */
-  .playback[data-paused="true"] { background: #2b2008; border-color: var(--held); }
+  .playback[data-paused="true"] { background: var(--held-wash); border-color: var(--held); }
   .playback[data-paused="true"] .playback-status { color: var(--held); font-weight: 600; }
   .playback[data-paused="true"] .playback-button {
     background: var(--held);
     border-color: var(--held);
     color: var(--paper);
+  }
+
+  /* The theme toggle. Built like the playback control beside it and set at the same size, so
+     the two read as one row of controls: a button labelled with what it will do next, and a
+     sentence saying which theme is on - because a viewer who has just arrived at a light page
+     has no way to know it is not simply what this page looks like. */
+  .theme {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: .55rem .8rem;
+    background: var(--panel);
+    border: 2px solid var(--rule);
+    border-radius: 12px;
+  }
+  .theme-button {
+    flex: none;
+    padding: .5rem 1.6rem;
+    background: transparent;
+    color: var(--ink);
+    border: 2px solid var(--ink);
+    border-radius: 9px;
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: clamp(1.05rem, 1.7vw, 1.45rem);
+    letter-spacing: .01em;
+    cursor: pointer;
+  }
+  .theme-button:hover { border-color: var(--ink-lift); color: var(--ink-lift); }
+  .theme-button:focus-visible { outline: 3px solid var(--held); outline-offset: 3px; }
+  .theme-status {
+    margin: 0;
+    max-width: 16ch;
+    color: var(--muted);
+    font-size: clamp(.82rem, 1.05vw, .95rem);
   }
 
   /* The readout: what the price is, right now. The mid is the largest number on the page by
@@ -297,6 +375,12 @@
       <button class="playback-button" type="button" data-playback="toggle">Pause</button>
       <p class="playback-status" data-playback="status" role="status">Live - orders are arriving and trading</p>
     </section>
+
+    <section class="theme" id="theme" data-theme="dark"
+      aria-label="Display theme. Switch between the dark page and a light one, for a bright room or a projector.">
+      <button class="theme-button" type="button" data-theme-control="toggle">Switch to light</button>
+      <p class="theme-status" data-theme-control="status" role="status">Dark theme - for a dim room</p>
+    </section>
   </header>
 
   <section class="readout" id="readout" aria-label="Top of book: the best price on each side, the middle of the two, and the gap between them.">
@@ -350,6 +434,7 @@
     <li><b>Bottom panel</b> the mid price over the last minute - what all that order flow adds up to</li>
     <li><b>Pause</b> stops the market so you can read it - nothing arrives while it is stopped, and
       it carries on from the same place</li>
+    <li><b>Switch to light</b> turns the page light for a bright room, and remembers which you chose</li>
   </ul>
 
   <script type="module" src="./src/app.js"></script>

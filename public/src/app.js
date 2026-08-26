@@ -24,12 +24,17 @@ import {
   drawQueues,
   drawReadout,
   drawTape,
+  drawTheme,
   playbackControl,
   recordMid,
   recordTrades,
+  themeControl,
+  themeName,
+  toggleTheme,
   topOfBook,
   CHART_LIMIT,
   CHART_WINDOW_MS,
+  DEFAULT_THEME,
   TAPE_LIMIT,
 } from './render.js';
 
@@ -166,6 +171,38 @@ export function advance(state, elapsedMs) {
   return applied;
 }
 
+// --- the theme (LLD-66) -----------------------------------------------------------------
+
+// Where the viewer's choice is kept between visits. Namespaced, because a demonstration is
+// often served from a host shared with other pages.
+export const THEME_STORAGE_KEY = 'orderbook-lab.theme';
+
+// Reading and writing are both allowed to fail. Private browsing does not hide localStorage,
+// it throws on touching it - so every access here is guarded, and a storage that refuses to
+// answer reads as no preference rather than as an error on screen.
+//
+// The storage is passed in rather than reached for, so this is testable without a browser
+// (NFR-2) and the same code path runs in both.
+export function readStoredTheme(storage = globalThis.localStorage) {
+  try {
+    return themeName(storage?.getItem(THEME_STORAGE_KEY));
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
+
+// Reports whether the choice was kept, not whether it was made: the caller has already
+// changed the theme by the time it asks, and a storage that would not take it does not undo
+// that for the session it is in.
+export function writeStoredTheme(storage, theme) {
+  try {
+    storage.setItem(THEME_STORAGE_KEY, themeName(theme));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function ladderDepth(state) {
   return depth(state.book, FLOW.ladderLevels);
 }
@@ -211,6 +248,7 @@ function start() {
   const tape = document.getElementById('tape');
   const chart = document.getElementById('chart');
   const playback = document.getElementById('playback');
+  const themeToggle = document.getElementById('theme');
   if (!ladder) return;
 
   const state = createSimulation();
@@ -227,14 +265,38 @@ function start() {
   });
   showControl();
 
+  // The theme. The page has already set the attribute from storage before it painted, so the
+  // theme is read back off the document rather than out of storage again - there is one answer
+  // and this is not the place it is decided.
+  //
+  // Switching it is one attribute on the root element, which repaints everything the
+  // stylesheet draws; the canvases are drawn in the palette of the same name on the next
+  // frame, which is the frame after this one. Nothing is reloaded and nothing is rebuilt.
+  let theme = themeName(document.documentElement.dataset.theme);
+  const showTheme = () => {
+    document.documentElement.dataset.theme = theme;
+    drawTheme(themeToggle, themeControl(theme));
+  };
+
+  themeToggle?.querySelector('[data-theme-control="toggle"]')?.addEventListener('click', () => {
+    theme = toggleTheme(theme);
+    showTheme();
+    // The choice is the viewer's whether or not it can be kept: a storage that refuses it
+    // costs the next visit, not this one.
+    writeStoredTheme(globalThis.localStorage, theme);
+  });
+  showTheme();
+
   const frame = (now) => {
     advance(state, previous === null ? 0 : now - previous);
     previous = now;
 
     // While paused nothing can have changed, so nothing is redrawn: the pause costs no work
-    // beyond noticing that the window has been resized under it, which is the one thing that
-    // alters what a still book should look like (NFR-4).
-    const size = `${ladder.clientWidth}x${ladder.clientHeight}`;
+    // beyond noticing that the window has been resized under it, or the theme switched under
+    // it - the two things that alter what a still book should look like (NFR-4). Without the
+    // theme in here, switching it on a paused page would repaint the markup and leave the
+    // canvases in the palette they were last drawn in.
+    const size = `${ladder.clientWidth}x${ladder.clientHeight}@${theme}`;
     const still = held && isPaused(state) && size === measured;
     measured = size;
     held = isPaused(state);
@@ -243,10 +305,10 @@ function start() {
       return;
     }
 
-    drawLadder(ladder, ladderDepth(state), { maxLevels: FLOW.ladderLevels });
-    if (queues) drawQueues(queues, touchQueues(state), { maxSegments: FLOW.queueSegments });
+    drawLadder(ladder, ladderDepth(state), { maxLevels: FLOW.ladderLevels, theme });
+    if (queues) drawQueues(queues, touchQueues(state), { maxSegments: FLOW.queueSegments, theme });
     if (readout) drawReadout(readout, topOfBook(touchLevels(state)));
-    if (chart) drawChart(chart, midSeries(state), { windowMs: FLOW.chartWindowMs });
+    if (chart) drawChart(chart, midSeries(state), { windowMs: FLOW.chartWindowMs, theme });
 
     // The tape only changes when something traded, and recordTrades returns the same list
     // when nothing did - so identity is enough to skip rewriting the rows on the frames in
