@@ -148,6 +148,14 @@
   .quote-note { margin: .1rem 0 0; color: var(--muted); font-size: clamp(.78rem, 1.05vw, .95rem); }
   .quote-note .quote-figure { font-family: var(--mono); font-weight: 600; color: var(--ink); }
 
+  /* The spread again as a share of the price it sits on: a second small figure on the same
+     line as the first, subordinate to it in brackets and nowhere near the mid in size, so it
+     is read as the same fact stated another way rather than as a third price.
+     With one side empty there is no ratio either, and the sentence in place of the absolute
+     figure already says so - saying it twice on one line reads as two separate faults, so the
+     bracket goes away entirely while the figure it holds is unavailable. */
+  .quote-bps:has([data-available="false"]) { display: none; }
+
   /* An absent price is a sentence where a number would be, and cannot be set at the size of
      one. Every slot says so the same way, so nothing on the readout is ever a dash or a
      zero standing in for a price that does not exist. */
@@ -299,7 +307,7 @@
     </section>
   </header>
 
-  <section class="readout" id="readout" aria-label="Top of book: the best price on each side, the middle of the two, and the gap between them.">
+  <section class="readout" id="readout" aria-label="Top of book: the best price on each side, the middle of the two, and the gap between them - both as a price and as a share of the price, in basis points.">
     <div class="quote bid">
       <p class="quote-label">Best bid - most anyone will pay</p>
       <p class="quote-price" data-readout="bid">-</p>
@@ -307,7 +315,8 @@
     <div class="quote mid">
       <p class="quote-label">Mid price</p>
       <p class="quote-price" data-readout="mid">-</p>
-      <p class="quote-note">Spread <span class="quote-figure" data-readout="spread">-</span></p>
+      <p class="quote-note">Spread <span class="quote-figure" data-readout="spread">-</span><span
+        class="quote-bps"> (<span class="quote-figure" data-readout="spreadBps">-</span> bps)</span></p>
     </div>
     <div class="quote ask">
       <p class="quote-label">Best ask - least anyone will sell for</p>

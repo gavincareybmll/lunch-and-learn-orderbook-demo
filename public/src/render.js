@@ -350,14 +350,19 @@ export function topOfBook(touch) {
   const bid = priceOf(touch?.bid);
   const ask = priceOf(touch?.ask);
   const twoSided = bid !== null && ask !== null;
+  const spread = twoSided ? ask - bid : null;
+  const mid = twoSided ? (bid + ask) / 2 : null;
 
   return {
     bid,
     ask,
-    // Absolute, in the same units as the prices either side of it. Basis points are held
-    // back by PRD section 8.
-    spread: twoSided ? ask - bid : null,
-    mid: twoSided ? (bid + ask) / 2 : null,
+    // Absolute, in the same units as the prices either side of it.
+    spread,
+    mid,
+    // ...and the same gap as a share of the price it sits on, in ten-thousandths (LLD-61).
+    // Multiplied before dividing: the spread over the mid is a small ratio, and scaling it
+    // first keeps a round answer round - 2 over 100 is exactly 200 bps, not 200.00000000000003.
+    spreadBps: twoSided ? (spread * 10000) / mid : null,
   };
 }
 
@@ -368,18 +373,28 @@ export const NO_ASKS = 'No sellers waiting';
 export const NO_MID = 'No mid price while one side is empty';
 // Reads after the word "Spread", which is where it appears.
 export const NO_SPREAD = 'unavailable while one side is empty';
+// The basis points figure is hidden when there is no spread to state - the sentence above
+// covers both - so this is what the slot holds rather than what a viewer reads.
+export const NO_SPREAD_BPS = 'not available';
 
-const READOUT_FIELDS = ['bid', 'ask', 'mid', 'spread'];
+// One decimal place: a basis point is a hundredth of a percent, so a tenth of one is as fine
+// as this is worth quoting, and a fixed width keeps the figure from twitching frame to frame.
+export function formatBasisPoints(bps) {
+  return Number.isFinite(bps) ? bps.toFixed(1) : '-';
+}
 
-// The four numbers of the readout as the strings that go on the page.
+const READOUT_FIELDS = ['bid', 'ask', 'mid', 'spread', 'spreadBps'];
+
+// The numbers of the readout as the strings that go on the page.
 export function formatReadout(model) {
-  const { bid = null, ask = null, mid = null, spread = null } = model ?? {};
+  const { bid = null, ask = null, mid = null, spread = null, spreadBps = null } = model ?? {};
 
   return {
     bid: bid === null ? NO_BIDS : formatPrice(bid),
     ask: ask === null ? NO_ASKS : formatPrice(ask),
     mid: mid === null ? NO_MID : formatPrice(mid),
     spread: spread === null ? NO_SPREAD : formatPrice(spread),
+    spreadBps: spreadBps === null ? NO_SPREAD_BPS : formatBasisPoints(spreadBps),
   };
 }
 
