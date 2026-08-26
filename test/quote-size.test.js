@@ -38,11 +38,16 @@ import { createSimulation, advance, touchLevels } from '../public/src/app.js';
 
 const level = (price, volume = 100, orderCount = 1) => ({ price, volume, orderCount });
 
-const closeTo = (actual, expected, what) =>
+const closeTo = (actual, expected, what, tolerance = 1e-9) =>
   assert.ok(
-    Math.abs(actual - expected) < 1e-9,
+    Math.abs(actual - expected) < tolerance,
     `${what}: expected ${expected}, got ${actual}`,
   );
+
+// A size on its way to the page may be rounded to something a stylesheet can use; a size out
+// of the calculation may not be. Half a thousandth of the base type size is a fraction of a
+// pixel at any size the page is read at.
+const WRITTEN_TOLERANCE = 5e-4;
 
 // The readout as drawReadout writes into it: four slots marked with data-readout, each of
 // which can hold text, an availability flag and a custom property. A stub rather than a DOM -
@@ -106,11 +111,17 @@ test('Given the touch, when the readout is written, then each price carries the 
 
   drawReadout(target, topOfBook({ bid: level(99, 900), ask: level(101, 600) }));
 
-  closeTo(scaleWritten(target.slots.bid), QUOTE_SCALE_MAX, 'the size written on the bid price');
+  closeTo(
+    scaleWritten(target.slots.bid),
+    QUOTE_SCALE_MAX,
+    'the size written on the bid price',
+    WRITTEN_TOLERANCE,
+  );
   closeTo(
     scaleWritten(target.slots.ask),
     QUOTE_SCALE_MAX * (600 / 900),
     'the size written on the ask price',
+    WRITTEN_TOLERANCE,
   );
 
   // The prices are still the prices: sizing them changes nothing about what they say.
